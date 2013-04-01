@@ -1,0 +1,134 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta http-equiv="Content-Style-Type" content="text/css">
+<link href="manual.css" rel="stylesheet" type="text/css">
+<title>Target Connection Diagrams</title>
+</head>
+
+<body>
+<h2>Target Connection Diagrams</h2>
+
+<h3>Development Boards</h3>
+
+<div>
+<h4 class=mcu>Arduino Uno/Diecimila/Duemilanove</h4>
+
+<div class=hvconn>
+	<p class=conn>ISP</p>
+	<img src="img/arduino_isp.svg" align=middle width="100%">
+</div>
+
+<p>An Arduino can be used to reprogram another Arduino.</p>
+
+<p>Since the Arduino's XTAL1 pin is connected to the oscillator, the only usable protocol is ISP. In desperate circumstances, it might be possible to remove the MCU from its socket (if your board has the socketed through-hole variant of the MCU) and program it on a breadboard.</p>
+  
+<p style="clear:both"/>
+</div>
+
+<div>
+<h4 class=mcu>Digispark</h4>
+
+<div class=hvconn>
+	<p class=conn>HVSP</p>
+	<img src="img/digispark_hvsp.svg" align=middle width="100%">
+</div>
+
+<p>The <a href="http://digistump.com">Digispark</a> is a tiny, <tt>ATtiny85</tt> based board featuring bitbang style USB connectivity.</p>
+
+<p>Since the Digispark has the RESET pin disabled to gain another I/O pin, it cannot be programmed through ISP. It needs to be programmed either through Digistump's variant of the Arduino IDE, or through HVSP.</p>
+  
+<p style="clear:both"/>
+</div>
+
+<h3>ATtiny MCUs</h4>
+
+<div>
+<h4 class=mcu>ATtiny13/25/45/85</h4>
+
+<div class=ispconn>
+	<p class=conn>ISP</p>
+	<img src="img/attiny85_isp.svg">
+</div>
+<div class=hvconn>
+	<p class=conn>HVSP</p>
+	<img src="img/attiny85_hvsp.svg">
+</div>
+<p style="clear:both"/>
+</div>
+
+<div class>
+<h4 class=mcu>ATtiny24/44/84</h4>
+
+<div class=ispconn>
+	<p class=conn>ISP</p>
+	<img src="img/attiny84_isp.svg">
+</div>
+<div class=hvconn>
+	<p class=conn>HVSP</p>
+	<img src="img/attiny84_hvsp.svg">
+</div>
+<p style="clear:both"/>
+</div>
+
+<div>
+<h4 class=mcu>ATtiny2313/4313</h4>
+
+<div class=ispconn>
+	<p class=conn>ISP</p>
+	<img src="img/attiny4313_isp.svg">
+</div>
+<div class=hvconn>
+	<p class=conn>HVPP</p>
+	<img src="img/attiny4313_hvpp.svg">
+</div>
+<p style="clear:both"/>
+</div>
+
+<div>
+<h4 class=mcu>ATtiny26/261/461/861</h4>
+
+<div class=ispconn>
+	<p class=conn>ISP</p>
+	<img src="img/attiny861_isp.svg">
+</div>
+<div class=hvconn>
+	<p class=conn>HVPP</p>
+	<img src="img/attiny861_hvpp.svg">
+</div>
+<p style="clear:both"/>
+</div>
+
+<h3>ATmega MCUs</h4>
+
+<div>
+<h4 class=mcu>ATmega48/88/168/328</h4>
+
+<div class=ispconn>
+	<p class=conn>ISP</p>
+	<img src="img/atmega328_isp.svg">
+</div>
+<div class=hvconn>
+	<p class=conn>HVPP</p>
+	<img src="img/atmega328_hvpp.svg">
+</div>
+<p style="clear:both"/>
+</div>
+
+<div>
+<h4 class=mcu>ATmega164/324/644/1284</h4>
+
+<div class=ispconn>
+	<p class=conn>ISP</p>
+	<img src="img/atmega1284_isp.svg">
+</div>
+<div class=hvconn>
+	<p class=conn>HVPP</p>
+	<img src="img/atmega1284_hvpp.svg">
+</div>
+<p style="clear:both"/>
+</div>
+
+</body>
+</html>
