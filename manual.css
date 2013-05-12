@@ -16,6 +16,14 @@ img.circuit {
 	float: right;
 	margin: 20px;
 }
+div.nav {
+	padding-left: 3mm;
+	padding-bottom: 3mm;
+	padding-right: 10mm;
+	padding-top: 3mm;
+	background-color: #c7eeff;
+	width: 90%;
+}
 div.ispconn {
 	background-color: #f8f8f8;
 	width: 49%;
@@ -41,4 +49,20 @@ h4.mcu {
 	width: 40%;
 	margin-left: 30%;
 	margin-right: 30%;
+}
+table {
+	margin-left: 5%;
+	border: 1px solid black;
+	border-collapse: collapse;
+}
+td {
+	padding: 5px
+}
+th {
+	background-color: #d0d0d0
+}
+tr:nth-child(odd) {background: #f0f0f0}
+tr:nth-child(even) {background: #ffffff}
+td.result {
+	text-align: center;
 }
