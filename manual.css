@@ -16,25 +16,53 @@ img.circuit {
 	float: right;
 	margin: 20px;
 }
-div.nav {
-	padding-left: 3mm;
-	padding-bottom: 3mm;
-	padding-right: 10mm;
-	padding-top: 3mm;
-	background-color: #c7eeff;
+table.striped {
+	margin-left: 5%;
+	border: 1px solid black;
+	border-collapse: collapse;
+}
+table.striped td {
+	padding: 5px
+}
+table.striped th {
+	background-color: #d0d0d0
+}
+table.striped tr:nth-child(odd) {background: #f0f0f0}
+table.striped tr:nth-child(even) {background: #ffffff}
+td.result {
+	text-align: center;
+}
+table.nav {
+	border: none;
+	margin: 1mm 5% 1mm 5%;
 	width: 90%;
+	padding: 2mm 2mm 2mm 2mm;
+	background-color: #dddeff;
+	font-family: sans-serif;
 }
-div.ispconn {
+table.nav td:nth-child(1) {
+	text-align: left;
+	width: 35%;
+}
+table.nav td:nth-child(2) {
+	text-align: center;
+	width: 30%;
+}
+table.nav td:nth-child(3) {
+	text-align: right;
+	width: 35%;
+}
+div.conn {
 	background-color: #f8f8f8;
 	width: 49%;
-	float: left;
 	padding-bottom: 2%;
+	float: right
 }
-div.hvconn {
-	background-color: #f8f8f8;
-	width: 49%;
-	float: right;
-	padding-bottom: 2%;
+div.conn img {
+	width: 90%;
+	margin: 1mm 5% 1mm 5%;
+	max-height: 8cm;
+	text-align: center;
 }
 p.conn {
 	font-family: Courier;
@@ -50,19 +78,9 @@ h4.mcu {
 	margin-left: 30%;
 	margin-right: 30%;
 }
-table {
-	margin-left: 5%;
-	border: 1px solid black;
-	border-collapse: collapse;
-}
-td {
-	padding: 5px
-}
-th {
-	background-color: #d0d0d0
-}
-tr:nth-child(odd) {background: #f0f0f0}
-tr:nth-child(even) {background: #ffffff}
-td.result {
-	text-align: center;
+
+form {
+	margin-bottom: 3mm;
+	padding: 2mm;
+	background-color: #99cc00;
 }
