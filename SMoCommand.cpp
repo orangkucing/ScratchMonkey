@@ -23,7 +23,7 @@
 const uint16_t  kHeaderSize         = 5;
 const uint16_t  kMaxBodySize        = 275;  // STK500 hardware limit
 
-static uint8_t  gSequenceNumber;
+static uint8_t  sSequenceNumber;
 static uint16_t sNumBytesRead       = 0;
 static uint16_t sNumBytesWanted     = 1;
 static uint8_t  sCheckSum           = 0;
@@ -78,7 +78,7 @@ SMoCommand::GetNextCommand()
         if (sNumBytesWanted > kMaxBodySize)
             goto reportHeaderError;
         sState          = kBodyState;
-        gSequenceNumber = gBody[1];
+        sSequenceNumber = gBody[1];
         sNumBytesRead   = 0;
         ++sNumBytesWanted;  // For checksum byte
         
@@ -106,9 +106,9 @@ void
 SMoCommand::SendResponse(uint8_t status, uint16_t bodySize)
 {
     gBody[1] = status;
-    sCheckSum   = MESSAGE_START ^ TOKEN ^ gSequenceNumber;
+    sCheckSum   = MESSAGE_START ^ TOKEN ^ sSequenceNumber;
     Serial.write(MESSAGE_START);
-    Serial.write(gSequenceNumber);
+    Serial.write(sSequenceNumber);
     sCheckSum  ^= bodySize >> 8;
     Serial.write(bodySize >> 8);
     sCheckSum  ^= bodySize & 0xFF;
