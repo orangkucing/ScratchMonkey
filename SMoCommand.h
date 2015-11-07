@@ -11,6 +11,10 @@
 // http://opensource.org/licenses/bsd-license.php
 //
 
+// Modified by Hisashi Ito <info at mewpro.cc> (c) 2015
+// in order to support HVprog2, an STK500 clone open hardware that you can buy or make.
+// http://www.mewpro.cc
+
 #ifndef _SMO_COMMAND_
 #define _SMO_COMMAND_
 

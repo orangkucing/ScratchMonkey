@@ -11,22 +11,27 @@
 // http://opensource.org/licenses/bsd-license.php
 //
 
+// Modified by Hisashi Ito <info at mewpro.cc> (c) 2015
+// in order to support HVprog2, an STK500 clone open hardware that you can buy or make.
+// http://www.mewpro.cc
+
 #include "SMoGeneral.h"
 #include "SMoCommand.h"
 
 #include <string.h>
 
-uint32_t    SMoGeneral::gAddress;
+union SMoGeneral::address_t SMoGeneral::gAddress;
 const uint8_t           kBuildNumberLow     = 0x01;
 const uint8_t           kBuildNumberHigh    = 0x00;
-const uint8_t           kHardwareVersion    = 0x00;
-const uint8_t           kSoftwareMajor      = 0x00;
-const uint8_t           kSoftwareMinor      = 0x01;
+const uint8_t           kHardwareVersion    = 0x02;
+const uint8_t           kSoftwareMajor      = 0x02;
+const uint8_t           kSoftwareMinor      = 0x0a;
 const uint8_t           kVoltage            =   50;
 uint8_t     SMoGeneral::gSCKDuration        = 2;    // 125kHz
 static uint8_t          gControllerInit     = 0;
-static uint8_t          gPrescale           = 0;    // Settable
-static uint8_t          gClockMatch         = 0;    //  ... but ignored
+uint8_t     SMoGeneral::gPrescale           = 1;
+uint8_t     SMoGeneral::gClockMatch         = 0;
+uint8_t     SMoGeneral::gResetPolarity      = 1;    // 1: AVR (active LOW), 0: 8051 (active HIGH)
 uint8_t     SMoGeneral::gControlStack[32];
 
 void    
@@ -47,13 +52,13 @@ SMoGeneral::SetParam()
         // Pick any voltage, as long as it's 5V
         //
         SMoCommand::SendResponse(value==kVoltage ? STATUS_CMD_OK : STATUS_CMD_FAILED);    
-        break;
+        return;
     case PARAM_SCK_DURATION:
         gSCKDuration    = value;
         break;
     case PARAM_RESET_POLARITY:
-        SMoCommand::SendResponse(value ? STATUS_CMD_OK : STATUS_CMD_FAILED);    
-        return;
+        gResetPolarity = value;    
+        break;
     case PARAM_CONTROLLER_INIT:
         gControllerInit = value;
         break;
@@ -98,7 +103,7 @@ SMoGeneral::GetParam()
         result  = gSCKDuration;
         break;
     case PARAM_RESET_POLARITY:
-        result  = 1;    // Always active low
+        result  = gResetPolarity;
         break;
     case PARAM_CONTROLLER_INIT:
         result  = gControllerInit;
@@ -123,11 +128,10 @@ SMoGeneral::GetParam()
 void    
 SMoGeneral::LoadAddress()
 {
-    SMoGeneral::gAddress = 
-               (uint32_t(SMoCommand::gBody[1]) << 24UL) 
-             | (uint32_t(SMoCommand::gBody[2]) << 16UL)
-             | (uint32_t(SMoCommand::gBody[3]) <<  8UL)
-             |  SMoCommand::gBody[4];
+    SMoGeneral::gAddress.c[3] = SMoCommand::gBody[1];
+    SMoGeneral::gAddress.c[2] = SMoCommand::gBody[2];
+    SMoGeneral::gAddress.c[1] = SMoCommand::gBody[3];
+    SMoGeneral::gAddress.c[0] = SMoCommand::gBody[4];
     SMoCommand::SendResponse();
 }
 

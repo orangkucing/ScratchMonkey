@@ -11,6 +11,10 @@
 // http://opensource.org/licenses/bsd-license.php
 //
 
+// Modified by Hisashi Ito <info at mewpro.cc> (c) 2015
+// in order to support HVprog2, an STK500 clone open hardware that you can buy or make.
+// http://www.mewpro.cc
+
 #ifndef _SMO_GENERAL_
 #define _SMO_GENERAL_
 
@@ -18,7 +22,17 @@
 
 namespace SMoGeneral {
     extern uint8_t  gSCKDuration;
-    extern uint32_t gAddress;
+    extern union address_t {
+        uint8_t c[4];
+        struct { 
+            uint16_t addr;
+            uint8_t extL;
+            uint8_t extH;
+        } d;
+    } gAddress;
+    extern uint8_t  gPrescale;
+    extern uint8_t  gClockMatch;
+    extern uint8_t  gResetPolarity;
     extern uint8_t  gControlStack[];
 
     void    SignOn();

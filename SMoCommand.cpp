@@ -11,14 +11,19 @@
 // http://opensource.org/licenses/bsd-license.php
 //
 
+// Modified by Hisashi Ito <info at mewpro.cc> (c) 2015
+// in order to support HVprog2, an STK500 clone open hardware that you can buy or make.
+// http://www.mewpro.cc
+
 #include <Arduino.h>
 
 #include "SMoCommand.h"
+#include "SMoConfig.h"
 
 const uint16_t  kHeaderSize         = 5;
 const uint16_t  kMaxBodySize        = 275;  // STK500 hardware limit
 
-static uint8_t  sSequenceNumber;
+static uint8_t  gSequenceNumber;
 static uint16_t sNumBytesRead       = 0;
 static uint16_t sNumBytesWanted     = 1;
 static uint8_t  sCheckSum           = 0;
@@ -57,7 +62,7 @@ SMoCommand::GetNextCommand()
     switch (sState) {
     case kIdleState:
         if (gBody[0] != MESSAGE_START) {
-        reportHeaderError:
+            reportHeaderError:
             ResetToIdle();
             return kHeaderError;
         } else {                            // Start of message
@@ -73,7 +78,7 @@ SMoCommand::GetNextCommand()
         if (sNumBytesWanted > kMaxBodySize)
             goto reportHeaderError;
         sState          = kBodyState;
-        sSequenceNumber = gBody[1];
+        gSequenceNumber = gBody[1];
         sNumBytesRead   = 0;
         ++sNumBytesWanted;  // For checksum byte
         
@@ -86,6 +91,10 @@ SMoCommand::GetNextCommand()
         } else {
             sState  = kCompleteState;
             gSize   = sNumBytesRead-1;
+#if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
+            digitalWrite(SMO_GLED, HIGH);
+            digitalWrite(SMO_RLED, LOW);
+#endif
             return gBody[0];   // Success!
         }
     default:
@@ -97,9 +106,9 @@ void
 SMoCommand::SendResponse(uint8_t status, uint16_t bodySize)
 {
     gBody[1] = status;
-    sCheckSum   = MESSAGE_START ^ TOKEN ^ sSequenceNumber;
+    sCheckSum   = MESSAGE_START ^ TOKEN ^ gSequenceNumber;
     Serial.write(MESSAGE_START);
-    Serial.write(sSequenceNumber);
+    Serial.write(gSequenceNumber);
     sCheckSum  ^= bodySize >> 8;
     Serial.write(bodySize >> 8);
     sCheckSum  ^= bodySize & 0xFF;
@@ -112,6 +121,15 @@ SMoCommand::SendResponse(uint8_t status, uint16_t bodySize)
     Serial.write(&gBody[0], bodySize);
     Serial.write(sCheckSum);
 
+#if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
+    if (status == STATUS_CMD_OK) {
+        digitalWrite(SMO_GLED, LOW);
+        digitalWrite(SMO_RLED, HIGH);
+    } else {
+        digitalWrite(SMO_GLED, HIGH);
+        digitalWrite(SMO_RLED, LOW);
+    }
+#endif
     ResetToIdle();
 }
 

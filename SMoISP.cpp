@@ -13,6 +13,10 @@
 // Derived from Randall Bohn's ArduinoISP sketch
 //
 
+// Modified by Hisashi Ito <info at mewpro.cc> (c) 2015
+// in order to support HVprog2, an STK500 clone open hardware that you can buy or make.
+// http://www.mewpro.cc
+
 #include <SPI.h>
 
 #include "SMoISP.h"
@@ -33,11 +37,30 @@ enum {
 #elif SMO_LAYOUT==SMO_LAYOUT_LEONARDO
     ISP_RESET       = 10,
     MCU_CLOCK       = 9,    // OC1A
-#else
+#elif SMO_LAYOUT==SMO_LAYOUT_MEGA
     ISP_RESET       = SS,
     MCU_CLOCK       = 11,   // OC1A
+#elif SMO_LAYOUT==SMO_LAYOUT_HVPROG2
+    ISP_RESET       = SMO_HVRESET,
+    MCU_CLOCK       = 15,   // OC2A or OC2
 #endif
 };
+
+#if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
+#define ISPAssertReset() \
+    do { \
+        digitalWrite(ISP_RESET, !SMoGeneral::gResetPolarity); \
+        digitalWrite(ISP_RESET, SMoGeneral::gResetPolarity); \
+    } while (0);
+#define ISPDeassertReset()   digitalWrite(ISP_RESET, !SMoGeneral::gResetPolarity);
+#else
+#define ISPAssertReset() \
+    do { \
+        digitalWrite(ISP_RESET, SMoGeneral::gResetPolarity); \
+        digitalWrite(ISP_RESET, !SMoGeneral::gResetPolarity); \
+    } while (0);
+#define ISPDeassertReset()   digitalWrite(ISP_RESET, SMoGeneral::gResetPolarity);
+#endif
 
 //
 // If an MCU has been set to use the 125kHz internal oscillator, 
@@ -124,46 +147,14 @@ SPITransaction(uint8_t b1, uint8_t b2, uint8_t b3, uint8_t b4)
 #endif
 }
 
-static uint8_t
-SPITransaction(uint8_t b1, uint32_t address, uint8_t b4)
-{
-    return SPITransaction(b1, (address >> 8) & 0xFF, address & 0xFF, b4);
-}
-
 static bool
 ISPPollReady()
 {
-    uint32_t timeout = millis()+100;
-    uint32_t now;
-    do {
-        if (SPITransaction(0xF0, 0, 0, 0))
-            return true;
-        now = millis();
-    } while ((timeout < 100 && now & 0x800000) || now < timeout);
-
-    SMoCommand::SendResponse(STATUS_RDY_BSY_TOUT);
-
-    return false;
-}
-
-static void
-LoadExtendedAddress()
-{
-#ifdef DEBUG_ISP
-        SMoDebug.print("Address was: ");
-        SMoDebug.println(SMoGeneral::gAddress, HEX);
-#endif
-    uint16_t highBits = SMoGeneral::gAddress >> 16;
-    if ((highBits >> 8) != (highBits & 0xFF)) {
-        SPITransaction(0x4D, 0, highBits & 0x7F, 0);
-        highBits    = 0x80 | (highBits & 0x7F);
-        highBits   |= highBits << 8;
-        SMoGeneral::gAddress = (SMoGeneral::gAddress & 0xFFFF) | (uint32_t(highBits) << 16);
-#ifdef DEBUG_ISP
-        SMoDebug.print("Address now: ");
-        SMoDebug.println(SMoGeneral::gAddress, HEX);
-#endif
-    }
+    uint32_t time = millis();
+    while (!SPITransaction(0xF0, 0, 0, 0)) // Poll RDY/BSY
+        if (millis() - time > 100UL)
+            return false;
+    return true;
 }
 
 void
@@ -171,13 +162,13 @@ SMoISP::EnterProgmode()
 {
 #ifdef DEBUG_ISP
     SMoDebugInit();
-    SMoDebug.print("Pin layout ");
-    SMoDebug.print(SMO_LAYOUT);
+    // SMoDebug.print("Pin layout ");
+    // SMoDebug.print(SMO_LAYOUT);
     SMoDebug.print(" RESET ");
     SMoDebug.println(ISP_RESET);
 #endif
     // const uint8_t   timeOut     =   SMoCommand::gBody[1];
-    // const uint8_t   stabDelay   =   SMoCommand::gBody[2];
+    const uint8_t   stabDelay   =   SMoCommand::gBody[2];
     // const uint8_t   cmdexeDelay =   SMoCommand::gBody[3];
     // const uint8_t   synchLoops  =   SMoCommand::gBody[4];
     // const uint8_t   byteDelay   =   SMoCommand::gBody[5];
@@ -190,32 +181,61 @@ SMoISP::EnterProgmode()
     //
     digitalWrite(MISO,      LOW);
     pinMode(MISO,           INPUT);
+#if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
+    // make sure that 12V regulator is shutdown 
+    digitalWrite(SMO_HVENABLE, LOW);
+    pinMode(SMO_HVENABLE, OUTPUT);
+#endif
+    ISPAssertReset();
     pinMode(ISP_RESET,      OUTPUT);
+    delay(stabDelay);
     SPI.begin();
     SPI.setDataMode(SPI_MODE0);
     SPI.setBitOrder(MSBFIRST);
+#if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
+    SPI.setClockDivider(
+        SMoGeneral::gSCKDuration == 0 ? SPI_CLOCK_DIV4  :   // 1.8432MHz
+       (SMoGeneral::gSCKDuration == 1 ? SPI_CLOCK_DIV16 :   // 460.8kHz  
+                                        SPI_CLOCK_DIV64));  // 115.2kHz (Default)
+#else
     SPI.setClockDivider(
         SMoGeneral::gSCKDuration == 0 ? SPI_CLOCK_DIV8  :   // 2MHz
        (SMoGeneral::gSCKDuration == 1 ? SPI_CLOCK_DIV32 :   // 500kHz  
                                         SPI_CLOCK_DIV128)); // 125kHz (Default)
+#endif
 
     //
-    // Set up clock generator on OC1A
+    // Set up clock generator on OC1A (OC2A or OC2 if HVPROG2)
     //
     pinMode(MCU_CLOCK, OUTPUT);
+#if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
+#ifdef TCCR2
+    TCCR2  = _BV(COM20) | _BV(WGM21);  // Stop Timer 2
+    TCNT2  = 0xFF;                     // Initialize counter value
+    OCR2   = SMoGeneral::gClockMatch;  // Set compare match value
+    // CTC mode, Toggle OC2 on Compare Match. Set timer operation mode and prescaler
+    TCCR2  = _BV(COM20) | _BV(WGM21) | (0x07 & SMoGeneral::gPrescale);
+#else
+    TCCR2B = 0;                        // Stop Timer 2
+    TCCR2A = _BV(COM2A0) | _BV(WGM21); // CTC mode, Toggle OC2A on Compare Match
+    TCNT2  = 0xFF;                     // Initialize counter value
+    OCR2A  = SMoGeneral::gClockMatch;  // Set compare match value
+    TCCR2B = 0x07 & SMoGeneral::gPrescale;// Set timer operation mode and prescaler
+#endif
+#else
+    TCCR1B = 0;                        // Stop clock generator
     TCCR1A = _BV(COM1A0);              // CTC mode, toggle OC1A on comparison with OCR1A
-    OCR1A  = 0;                        // F(OC1A) = 16MHz / (2*8*(1+0) == 1MHz
+    OCR1A  = 0;                        // F(OC1A) = 16MHz / (2*8*(1+0)) == 1MHz
     TIMSK1 = 0;
     TCCR1B = _BV(WGM12) | _BV(CS11);   // Prescale by 8
     TCNT1  = 0;
+#endif
     
     //
-    // Now reset the chip and issue the programming mode instruction
+    // Now issue the programming mode instruction
     //
     digitalWrite(SCK, LOW);
-    delay(50);
-    digitalWrite(ISP_RESET, LOW);
-    delay(50);
+
     uint8_t response = SPITransaction(command, pollIndex-1);
     if (response != pollValue) {
         //
@@ -235,10 +255,10 @@ SMoISP::EnterProgmode()
             SMoDebug.print(1000.0 / (4 << sSPILimpMode));
             SMoDebug.println("kHz).");
 #endif
-            digitalWrite(ISP_RESET, HIGH);
+            ISPDeassertReset();
             digitalWrite(SCK, LOW);
             delay(50);
-            digitalWrite(ISP_RESET, LOW);
+            ISPAssertReset();
             delay(50);
             response     = SPITransaction(command, pollIndex-1);
         } while (response != pollValue && sSPILimpMode++ < kMaxLimp);
@@ -249,12 +269,28 @@ SMoISP::EnterProgmode()
 void
 SMoISP::LeaveProgmode()
 {
-    TCCR1B = 0;    // Stop clock generator
+    const uint8_t   preDelay  =   SMoCommand::gBody[1];
+    const uint8_t   postDelay  =   SMoCommand::gBody[2];  
+
     if (sSPILimpMode)
         sSPILimpMode = false;
     else 
         SPI.end();     // Stop SPI
-    digitalWrite(ISP_RESET, HIGH);
+    delay(preDelay);
+    ISPDeassertReset();
+// stop timer
+#if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
+#ifdef TCCR2
+    TCCR2  = 0;
+#else
+    TCCR2B = 0;
+    TCCR2A = 0;
+#endif
+#else
+    TCCR1B = 0;
+    TCCR1A = 0;
+#endif
+    delay(postDelay);
     SMoCommand::SendResponse();
 }
 
@@ -267,15 +303,17 @@ SMoISP::ChipErase()
 
     SPITransaction(command);
     if (pollMethod) {
-        if (!ISPPollReady())
+        if (!ISPPollReady()) {
+            SMoCommand::SendResponse(STATUS_RDY_BSY_TOUT);
             return;
+        }
     } else
         delay(eraseDelay);
     SMoCommand::SendResponse();
 }
 
 static void
-ProgramMemory(bool wordBased)
+ProgramMemory(bool flash)
 {
     uint16_t  numBytes          =  (SMoCommand::gBody[1]<<8)|SMoCommand::gBody[2];
     uint8_t   mode              =   SMoCommand::gBody[3];
@@ -287,59 +325,61 @@ ProgramMemory(bool wordBased)
     const uint8_t   pollVal2    =   SMoCommand::gBody[9];
     const uint8_t * data        =  &SMoCommand::gBody[10];
 
-    LoadExtendedAddress();
-    uint32_t address = SMoGeneral::gAddress;
-    while (numBytes--) {
-        SPITransaction(cmd1, SMoGeneral::gAddress, *data++);
-        if (wordBased) {
-            --numBytes;
-            SPITransaction(cmd1|8, SMoGeneral::gAddress, *data++);
+    uint8_t pollVal = flash ? pollVal1 : pollVal2;
+    if (SMoGeneral::gAddress.d.extH & 0x80)
+        SPITransaction(0x4D, 0, SMoGeneral::gAddress.d.extL, 0); // Load Extended Address byte
+    do {
+        SPITransaction(!(numBytes & 1) || !flash ? cmd1 : cmd1|8, SMoGeneral::gAddress.c[1], SMoGeneral::gAddress.c[0], *data);
+        if (!(mode & 0x01) || (numBytes == 1 && mode & 0x80)) { // Byte mode or page loaded
+            if (mode & 0x01) // Page mode
+                SPITransaction(cmd2, SMoGeneral::gAddress.c[1], SMoGeneral::gAddress.c[0], 0);
+            if (mode & 0x12) // Timed delay
+                delay(cmdDelay);
+            else if (mode & 0x24) { // Value polling
+                if (pollVal == *data)
+                    delay(cmdDelay); // Values are identical - don't poll
+                else
+                    while (SPITransaction(!(numBytes & 1) || !flash ? cmd3 : cmd3|8, SMoGeneral::gAddress.c[1], SMoGeneral::gAddress.c[0], 0) == pollVal)
+                        ;
+            } else if (mode & 0x48 && !ISPPollReady()) // RDY/BSY polling
+                goto TIMEOUT_ProgramMemory;
         }
-        ++SMoGeneral::gAddress;
-    }
-    if ((mode & 0x81) == 0x81) {
-        //
-        // Write page
-        //
-        SPITransaction(cmd2, address, 0);
-        mode >>= 3;
-    } else if (mode & 0x01) {
-        mode   = 0;
-    }
-    if (mode & 0x02)
-        delay(cmdDelay);
-    if (mode & 0x04) {
-        uint8_t pollVal = wordBased ? pollVal1 : pollVal2;
-        if (pollVal == SMoCommand::gBody[10])
-            delay(cmdDelay); // Values are identical - don't poll
-        else
-            while (SPITransaction(cmd3, address, 0) == pollVal)
-                ;
-    }
-    if (mode & 0x08)
-        if (!ISPPollReady())
-            return;
+        data++;
+        if (!(--numBytes & 1) || !flash) {
+            SMoGeneral::gAddress.d.addr++;
+            if (!numBytes)
+                break;
+            if (SMoGeneral::gAddress.d.addr == 0)
+                SPITransaction(0x4D, 0, ++SMoGeneral::gAddress.d.extL, 0); // Load Extended Address byte
+        }
+    } while (numBytes);
     SMoCommand::SendResponse();
+    return;
+TIMEOUT_ProgramMemory:
+    SMoCommand::SendResponse(STATUS_RDY_BSY_TOUT);
 }
 
 static void
-ReadMemory(bool wordBased)
+ReadMemory(bool flash)
 {
     uint16_t  numBytes    =  (SMoCommand::gBody[1]<<8)|SMoCommand::gBody[2];
     const uint8_t   cmd   =   SMoCommand::gBody[3];
-    uint8_t * data        =  &SMoCommand::gBody[2];
+    uint8_t * outData        =  &SMoCommand::gBody[2];
 
-    LoadExtendedAddress();
-    while (numBytes--) {
-        *data++ = SPITransaction(cmd, SMoGeneral::gAddress, 0);
-        if (wordBased) {
-            --numBytes;
-            *data++ = SPITransaction(cmd|8, SMoGeneral::gAddress, 0);
+    if (SMoGeneral::gAddress.d.extH & 0x80)
+        SPITransaction(0x4D, 0, SMoGeneral::gAddress.d.extL, 0); // Load Extended Address byte
+    do {
+        *outData++ = SPITransaction(!(numBytes & 1) || !flash ? cmd : cmd|8, SMoGeneral::gAddress.c[1], SMoGeneral::gAddress.c[0], 0);
+        if (!(--numBytes & 1) || !flash) {
+            SMoGeneral::gAddress.d.addr++;
+            if (!numBytes)
+                break;
+            if (SMoGeneral::gAddress.c[0] == 0)
+                SPITransaction(0x4D, 0, ++SMoGeneral::gAddress.d.extL, 0); // Load Extended Address byte
         }
-        ++SMoGeneral::gAddress;
-    }
-    *data++ = STATUS_CMD_OK;
-    SMoCommand::SendResponse(STATUS_CMD_OK, data-&SMoCommand::gBody[0]);   
+    } while (numBytes);
+    *outData++ = STATUS_CMD_OK;
+    SMoCommand::SendResponse(STATUS_CMD_OK, outData - &SMoCommand::gBody[0]);   
 }
 
 void
@@ -378,9 +418,9 @@ void
 SMoISP::ReadFuse()
 {
     uint8_t pollIndex   = SMoCommand::gBody[1];
-    SMoCommand::gBody[2]= SPITransaction(&SMoCommand::gBody[2], pollIndex);
-    SMoCommand::gBody[2] = STATUS_CMD_OK;
-    SMoCommand::SendResponse();
+    SMoCommand::gBody[2]= SPITransaction(&SMoCommand::gBody[2], pollIndex-1);
+    SMoCommand::gBody[3] = STATUS_CMD_OK;
+    SMoCommand::SendResponse(STATUS_CMD_OK, 4);
 }
 
 void

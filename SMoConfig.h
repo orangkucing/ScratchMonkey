@@ -11,6 +11,10 @@
 // http://opensource.org/licenses/bsd-license.php
 //
 
+// Modified by Hisashi Ito <info at mewpro.cc> (c) 2015
+// in order to support HVprog2, an STK500 clone open hardware that you can buy or make.
+// http://www.mewpro.cc
+
 #ifndef _SMO_CONFIG_
 #define _SMO_CONFIG_
 
@@ -21,11 +25,13 @@
 //  - Standard Arduino: SPI on pins 10-13, pins 0/1 used for Serial (ATmega168/328)
 //  - Leonardo/Micro:   SPI on dedicated pins, pins 0/1 available   (ATmega32u4)
 //  - Mega:             SPI on pins 50-53, pins 0/1 used for Serial (ATmega1280/2560)
+//  - HVprog2:          Atmel's original STK500 compatible          (DIP-40 AVRs)
 //
 
 #define    SMO_LAYOUT_STANDARD     0
 #define    SMO_LAYOUT_LEONARDO     1
 #define    SMO_LAYOUT_MEGA         2
+#define    SMO_LAYOUT_HVPROG2      3
 
 #if defined(__AVR_ATmega32U4__)
 #define SMO_LAYOUT  SMO_LAYOUT_LEONARDO
@@ -33,6 +39,8 @@
 #define SMO_LAYOUT  SMO_LAYOUT_MEGA
 #elif defined(__AVR_ATmega328__) || defined(__AVR_ATmega328P__) || defined(__AVR_ATmega168__) || defined(__AVR_ATmega168P__)
 #define SMO_LAYOUT  SMO_LAYOUT_STANDARD
+#elif defined(__AVR_ATmega16__) || defined(__AVR_ATmega164P__) || defined(__AVR_ATmega32__) || defined(__AVR_ATmega324P__) || defined(__AVR_ATmega644P__) || defined(__AVR_ATmega1284P__)
+#define SMO_LAYOUT  SMO_LAYOUT_HVPROG2
 #else
 #error Unknown Arduino platform, help me define the correct pin layout
 #endif
@@ -59,9 +67,16 @@ enum {
 #elif SMO_LAYOUT==SMO_LAYOUT_LEONARDO
     SMO_SVCC       = 11,
     SMO_DEBUG      = A4
-#else
+#elif SMO_LAYOUT==SMO_LAYOUT_MEGA
     SMO_SVCC       = 11,
     SMO_DEBUG      = 18
+#elif SMO_LAYOUT==SMO_LAYOUT_HVPROG2
+    SMO_HVENABLE   = 11,
+#define SMO_AVCC     31
+    SMO_SVCC       = 13,
+    SMO_DEBUG      = 24,
+    SMO_GLED       = 29,
+    SMO_RLED       = 28
 #endif
 };
 

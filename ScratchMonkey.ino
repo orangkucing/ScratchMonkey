@@ -21,9 +21,15 @@
 //                ATtinys and all ATmegas). See SMoHVPP.h for pinout.
 //
 
-#include <SPI.h>
-#include <SoftwareSerial.h>
+// Modified by Hisashi Ito <info at mewpro.cc> (c) 2015
+// in order to support HVprog2, an STK500 clone open hardware that you can buy or make.
+// http://www.mewpro.cc
 
+#include <SPI.h>
+// There are no Pin Change interrupts w/ ATmega16/32 and we must comment out the following line.
+//#include <SoftwareSerial.h>
+
+#include "SMoConfig.h"
 #include "SMoCommand.h"
 #include "SMoGeneral.h"
 #include "SMoISP.h"
@@ -34,6 +40,12 @@ void
 setup()
 {
     Serial.begin(115200);
+#if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
+    digitalWrite(SMO_SVCC, HIGH);
+    pinMode(SMO_SVCC, OUTPUT);
+    pinMode(SMO_GLED, OUTPUT); digitalWrite(SMO_GLED, LOW);
+    pinMode(SMO_RLED, OUTPUT); digitalWrite(SMO_RLED, HIGH);
+#endif
 }
 
 void
