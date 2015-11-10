@@ -35,6 +35,7 @@
 #include "SMoISP.h"
 #include "SMoHVSP.h"
 #include "SMoHVPP.h"
+#include "SMoXPROG.h"
 
 void
 setup()
@@ -198,7 +199,16 @@ loop()
         break;
     case CMD_READ_OSCCAL_PP:
         SMoHVPP::ReadOscCal();
-        break;     
+        break;
+        //
+        // XPROG Commands
+        //
+    case CMD_XPROG:
+        SMoXPROG::XPROG();
+        break;
+    case CMD_XPROG_SETMODE:
+        SMoXPROG::XPROG_SetMode();
+        break;  
         // Pseudocommands   
     case SMoCommand::kHeaderError:
     case SMoCommand::kChecksumError:

@@ -32,6 +32,7 @@ namespace SMoGeneral {
     } gAddress;
     extern uint8_t  gPrescale;
     extern uint8_t  gClockMatch;
+    extern uint8_t  gDischargeDelay;
     extern uint8_t  gResetPolarity;
     extern uint8_t  gControlStack[];
 

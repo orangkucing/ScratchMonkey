@@ -9,6 +9,12 @@
 //*
 //**************************************************************************
 
+// Modified by Hisashi Ito <info at mewpro.cc> (c) 2015
+// in order to support HVprog2, an STK500 clone open hardware that you can buy or make.
+// http://www.mewpro.cc
+// 
+// XPROG related definition is copied from AVR079 - STK600 Communication Protocol
+
 // *****************[ STK message constants ]***************************
 
 #define MESSAGE_START                       0x1B        //= ESC = 27 decimal
@@ -76,6 +82,11 @@
 #define CMD_READ_SIGNATURE_HVSP             0x3B
 #define CMD_READ_OSCCAL_HVSP                0x3C
 
+// *****************[ STK XPROG command constants ]*****************************
+
+#define CMD_XPROG                           0x50
+#define CMD_XPROG_SETMODE                   0x51
+
 // *****************[ STK status constants ]***************************
 
 // Success
@@ -107,6 +118,8 @@
 #define PARAM_DATA                          0x9D
 #define PARAM_RESET_POLARITY                0x9E
 #define PARAM_CONTROLLER_INIT               0x9F
+
+#define PARAM_DISCHARGEDELAY                0xA4 /* STK600 */
 
 // *****************[ STK answer constants ]***************************
 

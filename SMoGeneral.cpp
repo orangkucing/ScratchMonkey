@@ -31,6 +31,7 @@ uint8_t     SMoGeneral::gSCKDuration        = 2;    // 125kHz
 static uint8_t          gControllerInit     = 0;
 uint8_t     SMoGeneral::gPrescale           = 1;
 uint8_t     SMoGeneral::gClockMatch         = 0;
+uint8_t     SMoGeneral::gDischargeDelay     = 232;
 uint8_t     SMoGeneral::gResetPolarity      = 1;    // 1: AVR (active LOW), 0: 8051 (active HIGH)
 uint8_t     SMoGeneral::gControlStack[32];
 
@@ -67,6 +68,9 @@ SMoGeneral::SetParam()
         break;
     case PARAM_OSC_CMATCH:
         gClockMatch = value;
+        break;
+    case PARAM_DISCHARGEDELAY:
+        gDischargeDelay = value;
         break;
     default:
         SMoCommand::SendResponse(STATUS_CMD_FAILED);
@@ -116,6 +120,9 @@ SMoGeneral::GetParam()
         break;
     case PARAM_TOPCARD_DETECT:
         result = 0;
+        break;
+    case PARAM_DISCHARGEDELAY:
+        result = gDischargeDelay;
         break;
     default:
         SMoCommand::SendResponse(STATUS_CMD_FAILED);

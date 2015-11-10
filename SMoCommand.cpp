@@ -122,7 +122,7 @@ SMoCommand::SendResponse(uint8_t status, uint16_t bodySize)
     Serial.write(sCheckSum);
 
 #if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
-    if (status == STATUS_CMD_OK) {
+    if ((gBody[0] != CMD_XPROG ? status : gBody[2] ) == STATUS_CMD_OK) {
         digitalWrite(SMO_GLED, LOW);
         digitalWrite(SMO_RLED, HIGH);
     } else {

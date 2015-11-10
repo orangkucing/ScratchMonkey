@@ -444,7 +444,7 @@ SMoHVPP::EnterProgmode()
     // power on target
     digitalWrite(HVPP_VCC, HIGH);
     delay(resetDelayMs);
-    delayMicroseconds(resetDelayUs * 10 + 250);
+    delayMicroseconds(resetDelayUs * 10 + 250); // add extra 250 microseconds
     // toggle XTAL1
     for (uint8_t i=0; i<latchCycles; ++i) {
         HVPP_TOGGLE_XTAL;
