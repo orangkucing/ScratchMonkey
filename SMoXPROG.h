@@ -1,10 +1,36 @@
+// -*- mode: c++; tab-width: 4; indent-tabs-mode: nil -*-
+//
+// ScratchMonkey 0.1        - STK500v2 compatible programmer for Arduino
+//
+// File: SMoXPROG.cpp       - XPROG Interface
+//
+
+// This part of ScratchMonkey is written by Hisashi Ito <info at mewpro.cc> (c) 2015
+// in order to support HVprog2, an STK500 clone open hardware that you can buy or make.
+// http://www.mewpro.cc
+//
+// Derived from source codes of LUFA AVRISP mkII clone, avrdude, USBasp
+// and ATtiny4_5_9_10_20_40Programmer.ino
+
+// The same license as main part applies.
+
 #ifndef _SMO_XPROG_
 #define _SMO_XPROG_
 
 namespace SMoXPROG {
     void XPROG();
     void XPROG_SetMode();
+    extern struct param_t {
+        uint32_t NVMBase;
+        uint16_t EEPageSize;
+        uint8_t NVMCMD; // Non-Volatile Memory Command Register
+        uint8_t NVMCSR; // Non-Volatile Memory Control and Status Register
+        uint16_t unknown; // since AVRStudio 5.1
+    } XPRGParam;
 } // namespace SMoXPROG
+
+#include "SMoCommand.h"
+#define XPRG_Body (SMoCommand::gBody+1)
 
 // XPROG modes
 #define XPRG_MODE_PDI                       0

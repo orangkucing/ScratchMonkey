@@ -121,7 +121,7 @@ SMoGeneral::GetParam()
     case PARAM_TOPCARD_DETECT:
         result = 0;
         break;
-    case PARAM_DISCHARGEDELAY:
+    case PARAM_DISCHARGEDELAY: // TPI only
         result = gDischargeDelay;
         break;
     default:

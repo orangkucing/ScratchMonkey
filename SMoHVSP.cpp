@@ -309,7 +309,7 @@ ProgramMemory(bool flash)
         if (!(--numBytes & 1) || !flash) {
             SMoGeneral::gAddress.d.addr++;
             if (mode & 1) { // Page mode
-                if (!(SMoGeneral::gAddress.d.addr & pageMask) || (numBytes == 0 && mode & 0xC0)) { // Write page to memory
+                if (!(SMoGeneral::gAddress.d.addr & pageMask) && mode & 0x80 || (numBytes == 0 && mode & 0x40)) { // Write page to memory
                     HVSPTransfer(HVSPControlPattern(sCommitData, sLowByte));
                     HVSPTransfer(HVSPControlDone(sCommitData, sLowByte));
                     if (!HVSPPollWait(pollTimeout))

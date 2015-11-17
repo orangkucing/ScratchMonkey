@@ -62,7 +62,13 @@ enum {
 #define ISPDeassertReset()   digitalWrite(ISP_RESET, SMoGeneral::gResetPolarity);
 #endif
 
-//
+const SPISettings ISPSPISetting[3] = {
+    SPISettings(2000000, MSBFIRST, SPI_MODE0),
+    SPISettings(500000, MSBFIRST, SPI_MODE0),
+    SPISettings(125000, MSBFIRST, SPI_MODE0),
+};
+    
+//                                                                                         
 // If an MCU has been set to use the 125kHz internal oscillator, 
 // regular SPI speeds are much too fast, so we do a software 
 // emulation that's deliberately slow.
@@ -179,30 +185,19 @@ SMoISP::EnterProgmode()
     //
     // Set up SPI
     //
-    digitalWrite(MISO,      LOW);
-    pinMode(MISO,           INPUT);
 #if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
     // make sure that 12V regulator is shutdown 
     digitalWrite(SMO_HVENABLE, LOW);
     pinMode(SMO_HVENABLE, OUTPUT);
 #endif
-    ISPAssertReset();
-    pinMode(ISP_RESET,      OUTPUT);
-    delay(stabDelay);
+    // to avoid glitch in SCK and MOSI we must set CPOL before SPI.begin()
+    SPCR &= ~_BV(CPOL) & ~_BV(CPHA); // idle LOW for SPI_MODE0
+    //
     SPI.begin();
-    SPI.setDataMode(SPI_MODE0);
-    SPI.setBitOrder(MSBFIRST);
-#if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
-    SPI.setClockDivider(
-        SMoGeneral::gSCKDuration == 0 ? SPI_CLOCK_DIV4  :   // 1.8432MHz
-       (SMoGeneral::gSCKDuration == 1 ? SPI_CLOCK_DIV16 :   // 460.8kHz  
-                                        SPI_CLOCK_DIV64));  // 115.2kHz (Default)
-#else
-    SPI.setClockDivider(
-        SMoGeneral::gSCKDuration == 0 ? SPI_CLOCK_DIV8  :   // 2MHz
-       (SMoGeneral::gSCKDuration == 1 ? SPI_CLOCK_DIV32 :   // 500kHz  
-                                        SPI_CLOCK_DIV128)); // 125kHz (Default)
-#endif
+    SPI.beginTransaction(SMoGeneral::gSCKDuration > 2 ? ISPSPISetting[2] : ISPSPISetting[SMoGeneral::gSCKDuration]);
+    ISPAssertReset();
+    pinMode(ISP_RESET, OUTPUT);
+    delay(stabDelay);
 
     //
     // Set up clock generator on OC1A (OC2A or OC2 if HVPROG2)
@@ -241,7 +236,8 @@ SMoISP::EnterProgmode()
         //
         // Ooops, that's bad. Try again in limp mode
         //
-        SPI.end();
+        SPI.endTransaction();
+        SPI.end();       
         sSPILimpMode = 2;   // Start at 16µs, 60kHz bit clock
         pinMode(MOSI, OUTPUT);
         pinMode(SCK, OUTPUT);
@@ -274,8 +270,10 @@ SMoISP::LeaveProgmode()
 
     if (sSPILimpMode)
         sSPILimpMode = false;
-    else 
+    else {
+        SPI.endTransaction();
         SPI.end();     // Stop SPI
+    }
     delay(preDelay);
     ISPDeassertReset();
 // stop timer

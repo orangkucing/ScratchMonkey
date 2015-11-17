@@ -290,7 +290,7 @@ inline void
 HVPPInitControlSignals()
 {
     // disable pullups as SPI.end() doesn't restore them
-    DDRB = 0; PORTB = 0; DDRB = 0xFF;
+    DDRB = 0xFF;
     // set data directions
     DDRC = SMoGeneral::gControlStack[kRdyBsyMask];
 }
@@ -522,7 +522,7 @@ ProgramMemory(bool flash)
             SMoGeneral::gAddress.d.addr++;
             if (mode & 1) { // Page mode
                 HVPPControls(HVPPControlPattern(kPageLoad, kLowByte)); // assert PAGEL
-                if (!(SMoGeneral::gAddress.d.addr & pageMask) || (numBytes == 0 && mode & 0xC0)) { // Write page to memory
+                if (!(SMoGeneral::gAddress.d.addr & pageMask) && mode & 0x80 || (numBytes == 0 && mode & 0x40)) { // Write page to memory
                     HVPPControls(HVPPControlPattern(kCommitData, kLowByte));
                     HVPPControls(HVPPControlPattern(kDone, kLowByte));
                     if (!HVPPPollWait(pollTimeout))

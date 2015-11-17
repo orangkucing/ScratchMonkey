@@ -23,6 +23,7 @@
 namespace SMoGeneral {
     extern uint8_t  gSCKDuration;
     extern union address_t {
+        uint32_t l;
         uint8_t c[4];
         struct { 
             uint16_t addr;
