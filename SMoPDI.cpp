@@ -212,14 +212,14 @@ MOSI_GATE_INIT(void)
 
 #endif
 
+#if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
 #if defined(TIMER2_COMP_vect)
 #define TIMER_COMP_vect TIMER2_COMP_vect
-#elif defined(TIMER2_COMPA_vect)
-#define TIMER_COMP_vect TIMER2_COMPA_vect
-#elif defined(TIMER4_COMPA_vect)
-#define TIMER_COMP_vect TIMER4_COMPA_vect
 #else
-#error unknown microcontroller
+#define TIMER_COMP_vect TIMER2_COMPA_vect
+#endif
+#else
+#define TIMER_COMP_vect TIMER1_COMPA_vect
 #endif
 
 ISR(TIMER_COMP_vect)
@@ -249,24 +249,28 @@ inline void
 HeartBeatOn(void)
 {
     // Set timer operation mode and prescaler 1/8
+#if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
 #if defined(TCCR2)
     TCCR2  = _BV(WGM21) | _BV(CS21);
-#elif defined(TCCR2B)
+#else
     TCCR2B = _BV(CS21);
-#elif defined(TCCR4B)
-    TCCR4B = _BV(CS42);
+#endif
+#else
+    TCCR1B = _BV(CS11);
 #endif
 }
 
 inline void
 HeartBeatOff(void)
 {
+#if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
 #if defined(TCCR2)
     TCCR2  = 0;
-#elif defined(TCCR2B)
+#else
     TCCR2B = 0;
-#elif defined(TCCR4B)
-    TCCR4B = 0;
+#endif
+#else
+    TCCR1B = 0;
 #endif
 }
 
@@ -287,6 +291,7 @@ EnableHeartBeat(void)
 #else
 #define CMV 80
 #endif
+#if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
 #if defined(TCCR2)
     TCCR2  = _BV(WGM21);               // Stop Timer 2
     TCNT2  = 0xFF;                     // Initialize counter value
@@ -294,22 +299,21 @@ EnableHeartBeat(void)
     // CTC mode. Set timer operation mode and prescaler 1/8
     TIMSK  |= _BV(OCIE2);              // TIMER2_COMP interrupt enabled
     TCCR2  = _BV(WGM21) | _BV(CS21);
-#elif defined(TCCR2B)
+#else
     TCCR2B = 0;                        // Stop Timer 2
     TCCR2A = _BV(WGM21);               // CTC mode
     TCNT2  = 0xFF;                     // Initialize counter value
     OCR2A  = CMV;                      // Set compare match value
     TIMSK2 |= _BV(OCIE2A);             // TIMER2_COMPA interrupt enabled
     TCCR2B = _BV(CS21);                // Set timer operation mode and prescaler 1/8
-#elif defined(TCCR4B)
-    TCCR4B = 0;                        // Stop Timer 4
-    TCCR4A = 0;                        // non-PWM
-    TC4H = 0x07;
-    TCNT4 = 0xFF;
-    TC4H = 0;
-    OCR4A = CMV;                       // Set compare match value
-    TIMSK4 |= _BV(OCIE4A);             // TIMER4_COMPA interrupt enabled
-    TCCR4B |= _BV(CS42);               // Set timer operation mode and prescaler 1/8
+#endif
+#else
+    TCCR1B = 0;                        // Stop clock generator
+    TCCR1A = _BV(WGM12);               // CTC mode
+    TCNT1  = 0xFF;                     // Initialize counter value
+    OCR1A  = CMV;                      // Set compare match value
+    TIMSK1 |= _BV(OCIE1A);             // TIMER1_COMPA interrupt enabled
+    TCCR1B = _BV(CS11);                // Set timer operation mode and Prescaler 1/8
 #endif
     interrupts();
 }
@@ -319,16 +323,18 @@ DisableHeartBeat(void)
 {
     // stop timer
     noInterrupts();
+#if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
 #if defined(TCCR2)
     TCCR2  = 0;
     TIMSK &= ~_BV(OCIE2);
-#elif defined(TCCR2B)
+#else
     TCCR2B = 0;
     TCCR2A = 0;
     TIMSK2 &= ~_BV(OCIE2A);
-#elif defined(TCCR4B)
-    TIMSK4 &= ~_BV(OCIE4A);
-    TCCR4B = 0;
+#endif
+#else
+    TIMSK1 &= ~_BV(OCIE1A);
+    TCCR1B = 0;
 #endif
     interrupts();
 }
