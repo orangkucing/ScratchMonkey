@@ -20,6 +20,8 @@
 #include "SMoXPROG.h"
 #include "SMoPDI.h"
 
+#define TIMEOUT 100
+
 //                                 B0x10pidd x=rw, p=direct, i=postinc, dd=datasize
 #define PDI_CMD_LD                 B00100000
 #define PDI_CMD_ST                 B01100000
@@ -511,24 +513,32 @@ PDIDisableTarget(void)
     SPI.end();
 }
 
-static void
+static bool
 WaitUntilNVMActive(void)
 {
     /* Wait until the bus between PDI controller and NVM becomes active */
     uint8_t s;
+    uint8_t timeout = TIMEOUT;
     do {
         PDITransfer(PDI_CMD_LDCS | REG_STATUS, &s);
+        if (timeout-- == 0)
+            return false;
     } while (!(s & _BV(NVMEN)));
+    return true;
 }
 
-static void
+static bool
 WaitWhileNVMControllerBusy(void)
 {
     uint8_t s;
+    uint8_t timeout = TIMEOUT;
     PDITransfer(PDI_CMD_ST | POINTER_REG | Data32_t, SMoXPROG::XPRGParam.NVMBase | NVMREG_STATUS);
     do {
         PDITransfer(PDI_CMD_LD | POINTER_UNCHANGED | Data8_t, &s);
+        if (timeout-- == 0)
+            return false;
     } while (s & _BV(NVMBSY));
+    return true;
 }
 
 //----------------------------------------------------------------------------------------
@@ -542,15 +552,13 @@ SMoPDI::EnterProgmode()
     /* Store the RESET key into the RESET PDI registor */
     PDITransfer(PDI_CMD_STCS | REG_RESET, (uint8_t)0x59); // reset key
     
-    /* Direction change guard time to 0 USART bits */
+    /* Direction change guard time to 0 CLK bits */
     //PDITransfer(PDI_CMD_STCS | REG_CTRL, (uint8_t)(GT2 | GT1 | GT0));
 
     /* Enable access to the XPROG NVM bus by sending the documented NVM access key to the device */
     PDISendKey();
  
-    WaitUntilNVMActive();
-
-    XPRG_Body[1] = XPRG_ERR_OK;
+    XPRG_Body[1] = WaitUntilNVMActive() ? XPRG_ERR_OK : XPRG_ERR_TIMEOUT;
     return 2;
 }
 
@@ -558,16 +566,24 @@ uint16_t
 SMoPDI::LeaveProgmode()
 {
     uint8_t s;
+    uint8_t timeout = TIMEOUT;
 
-    WaitWhileNVMControllerBusy();
+    if (!WaitWhileNVMControllerBusy())
+        goto LeaveProgmodeERROR;
+        
     do {
         PDITransfer(PDI_CMD_STCS | REG_RESET, (uint8_t)0x00);
         PDITransfer(PDI_CMD_LDCS | REG_RESET, &s);
+        if (timeout-- == 0)
+            goto LeaveProgmodeERROR;
     } while (s);
-
     PDIDisableTarget();
-
     XPRG_Body[1] = XPRG_ERR_OK;
+    return 2;
+    
+LeaveProgmodeERROR:
+    PDIDisableTarget();
+    XPRG_Body[1] = XPRG_ERR_TIMEOUT;
     return 2;
 }
 
@@ -622,13 +638,56 @@ SMoPDI::Erase()
         PDITransfer(PDI_CMD_ST | POINTER_UNCHANGED | Data8_t, (uint8_t)0xFF); // dummy write
     }
     if (command == CHIP_ERASE)
-        WaitUntilNVMActive();
-    WaitWhileNVMControllerBusy();
-    
-    XPRG_Body[1] = XPRG_ERR_OK;
+        if (!WaitUntilNVMActive()) {
+            XPRG_Body[1] = XPRG_ERR_TIMEOUT;
+            return 2;
+        }
+    XPRG_Body[1] = WaitWhileNVMControllerBusy() ? XPRG_ERR_OK : XPRG_ERR_TIMEOUT;
     return 2;
 }
 
+/* There are many many typos in Atmel's application note AVR079, dated back to Apr. 2008. 
+The following should be the correct statements written there about XPRG_WRITE_MEM:
+----------------------------------------------------------------------------------------------------------
+9.2.5 XPRG_WRITE_MEM 
+This command handles programming of the different XMega memories: application, 
+boot and eeprom. Fuses, lockbits and user signatures are also programmed with this 
+command. 
+
+Table 9-13. Command format. 
+Offset Field                                       Size       Values 
+0      Command ID (1)                              1 byte     XPRG_WRITE_MEM
+1      Memory type (2)                             1 byte     Application, Boot, EEPROM, Fuse, Lockbits... 
+2      PageMode (3)                                1 byte     Bitfield, see description below 
+3      Address (4)                                 4 bytes    Any address 
+7      Length (5)                                  2 bytes    1 to 256
+9      Data (6)                                    N bytes    N data bytes, size is given by the Length parameter 
+
+Notes:      1.    The command identifier 
+            2.    XPRG_MEM_TYPE_APPL 
+                  XPRG_MEM_TYPE_BOOT 
+                  XPRG_MEM_TYPE_EEPROM 
+                  XPRG_MEM_TYPE_FUSE 
+                  XPRG_MEM_TYPE_LOCKBITS 
+                  XPRG_MEM_TYPE_USERSIG 
+            3.    If Memory type is XPRG_MEM_TYPE_APPL, XPRG_MEM_TYPE_BOOT or XPRG_MEM_TYPE_EEPROM: 
+                  Bit 0: Erase page 
+                  Bit 1: Write page 
+            4.    The start address of the data to be written. The address is in the TIF address space 
+            5.    Can be any value between 1 and 256. If page programming, and the actual page size is bigger than 256, the 
+                  operation must be split into two or more XPRG_WRITE_MEM operations, where only the last operation has the 
+                  Write page bit set. 
+                  Note: Only APP, BOOT and EEPROM handles page operations, for any other memory type, the Length field must 
+                  be set to 1. 
+            4.    The data to be written. The size is indicated by the Length field. 
+----------------------------------------------------------------------------------------------------------
+Four years after this reference, Atmel Studio 5.1 (Feb. 2012) introduced a new parameter XPRG_PARAM_FLASHPAGESIZE to
+STK600's XPROG protocol. The improvement is because the old implimentation imposed the PC side software on sending
+data chunks of the same length as target's page size.
+
+Here we are going to code so that both old and new methods will work. Note the PageMode bitfield included in any
+new packet has the write page bit set.
+ */
 uint16_t
 SMoPDI::WriteMem()
 {
@@ -643,64 +702,81 @@ SMoPDI::WriteMem()
     
     uint8_t command = LOAD_FLASH_BUFFER;
     uint8_t erase = ERASE_FLASH_BUFFER;
-    uint8_t command1;
-    bool paged = true;
+    uint8_t commit;
+    uint16_t pageMask = 0;
     switch (memcode) {
     case XPRG_MEM_TYPE_APPL:
-        command1 = mode & _BV(XPRG_MEM_WRITE_ERASE) ? ERASE_WRITE_APP_PAGE : WRITE_APP_PAGE;
+        commit = mode & _BV(XPRG_MEM_WRITE_ERASE) ? ERASE_WRITE_APP_PAGE : WRITE_APP_PAGE;
+        pageMask = SMoXPROG::XPRGParam.FlashPageSize - 1;
         break;
     case XPRG_MEM_TYPE_BOOT:
-        command1 = mode & _BV(XPRG_MEM_WRITE_ERASE) ? ERASE_WRITE_BOOT_PAGE : WRITE_BOOT_PAGE;
+        commit = mode & _BV(XPRG_MEM_WRITE_ERASE) ? ERASE_WRITE_BOOT_PAGE : WRITE_BOOT_PAGE;
+        pageMask = SMoXPROG::XPRGParam.FlashPageSize - 1;
         break;
     case XPRG_MEM_TYPE_EEPROM:
         command = LOAD_EEPROM_BUFFER;
         erase = ERASE_EEPROM_BUFFER;
-        command1 = mode & _BV(XPRG_MEM_WRITE_ERASE) ? ERASE_WRITE_EEPROM_PAGE : WRITE_EEPROM_PAGE;
+        commit = mode & _BV(XPRG_MEM_WRITE_ERASE) ? ERASE_WRITE_EEPROM_PAGE : WRITE_EEPROM_PAGE;
+        pageMask = SMoXPROG::XPRGParam.EEPageSize - 1;
         break;
     case XPRG_MEM_TYPE_FUSE:
         command = WRITE_FUSES;
-        paged = false;
         break;
     case XPRG_MEM_TYPE_LOCKBITS:
         command = WRITE_LOCK_BITS;
-        paged = false;
         break;
     case XPRG_MEM_TYPE_USERSIG:
-        command1 = WRITE_USER_SIG_ROW;  
+        command = WRITE_USER_SIG_ROW;
         break;
     default:
         XPRG_Body[1] = XPRG_ERR_FAILED;
         return 2;
     }
 
-    if (paged) {
+    if (pageMask) {
+        uint32_t startAddress = SMoGeneral::gAddress.l;
+        uint8_t sendMask = pageMask > 0xFF ? 0xFF : pageMask;
         if (numBytes & 1)
             data[numBytes++] = 0xFF; // always transfer even bytes
         // load page buffer
         PDITransfer(PDI_CMD_STS | Addr32_t | Data8_t, SMoXPROG::XPRGParam.NVMBase | NVMREG_CMD, command);
         PDITransfer(PDI_CMD_ST | POINTER_REG | Data32_t, SMoGeneral::gAddress.l);
-        PDITransfer(PDI_CMD_REPEAT | Data8_t, (uint8_t)(numBytes - 1), (uint8_t)(PDI_CMD_ST | POINTER_POST_INC | Data8_t));
         do {
-            PDITransfer(*data, *(data+1));
-            data += 2;
-            numBytes -= 2;
+            PDITransfer(PDI_CMD_REPEAT | Data8_t, (uint8_t)(sendMask - (uint8_t)(SMoGeneral::gAddress.l & sendMask)), (uint8_t)(PDI_CMD_ST | POINTER_POST_INC | Data8_t));
+            do {
+                if (numBytes) {
+                    PDITransfer(*data, *(data+1));
+                    data += 2;
+                    numBytes -= 2;
+                } else {
+                    PDITransfer((uint8_t)0xFF, (uint8_t)0xFF);
+                }
+                SMoGeneral::gAddress.l += 2;
+            } while (SMoGeneral::gAddress.l & sendMask);
+            if (!WaitWhileNVMControllerBusy())
+                goto WriteMemERROR;
+            if ((numBytes == 0 || !(SMoGeneral::gAddress.l & pageMask)) && mode & _BV(XPRG_MEM_WRITE_WRITE)) {
+                // write page
+                PDITransfer(PDI_CMD_STS | Addr32_t | Data8_t, SMoXPROG::XPRGParam.NVMBase | NVMREG_CMD, commit);
+                PDITransfer(PDI_CMD_STS | Addr32_t | Data8_t, startAddress, (uint8_t)0xFF); // dummy write
+                if (!WaitWhileNVMControllerBusy())
+                    goto WriteMemERROR;
+            }
         } while (numBytes);
-        if (mode & _BV(XPRG_MEM_WRITE_WRITE)) {
-            WaitWhileNVMControllerBusy();
-            // write page
-            PDITransfer(PDI_CMD_STS | Addr32_t | Data8_t, SMoXPROG::XPRGParam.NVMBase | NVMREG_CMD, command1);
-            PDITransfer(PDI_CMD_STS | Addr32_t | Data8_t, SMoGeneral::gAddress.l, (uint8_t)0xFF); // dummy write
-            WaitWhileNVMControllerBusy();
-        }
-    } else // Byte mode
+    } else { // Byte mode
         PDITransfer(PDI_CMD_STS | Addr32_t | Data8_t, SMoXPROG::XPRGParam.NVMBase | NVMREG_CMD, command);
         PDITransfer(PDI_CMD_ST | POINTER_REG | Data32_t, SMoGeneral::gAddress.l);            
         do {
             PDITransfer(PDI_CMD_ST | POINTER_POST_INC | Data8_t, *data++);
-            WaitWhileNVMControllerBusy();
+            if (!WaitWhileNVMControllerBusy())
+                goto WriteMemERROR;
         } while (--numBytes);
-
+    }
+    
     XPRG_Body[1] = XPRG_ERR_OK;
+    return 2;
+WriteMemERROR:
+    XPRG_Body[2] = XPRG_ERR_TIMEOUT;
     return 2;
 }
 
@@ -754,7 +830,7 @@ SMoPDI::CRC()
     uint8_t type = XPRG_Body[1];
     uint8_t *outData = &XPRG_Body[2];
     
-    uint8_t command;
+    uint8_t command, b;
     switch (type) {
     case XPRG_CRC_APP:
         command = APP_CRC;
@@ -774,18 +850,20 @@ SMoPDI::CRC()
     PDITransfer(PDI_CMD_ST | POINTER_UNCHANGED | Data8_t, (uint8_t)command);
     PDITransfer(PDI_CMD_ST | POINTER_REG | Data8_t, (uint8_t)NVMREG_CTRLA);
     PDITransfer(PDI_CMD_ST | POINTER_UNCHANGED | Data8_t, (uint8_t)_BV(CMDEX));
-    if (command == FLASH_CRC)
-        WaitUntilNVMActive();
-    WaitWhileNVMControllerBusy();
+    if (command == FLASH_CRC && !WaitUntilNVMActive() || !WaitWhileNVMControllerBusy())
+        goto CRCERROR;
     PDITransfer(PDI_CMD_ST | POINTER_REG | Data8_t, (uint8_t)NVMREG_DATA0);
     PDITransfer(PDI_CMD_LD | POINTER_POST_INC | Data8_t, outData++);
     PDITransfer(PDI_CMD_LD | POINTER_POST_INC | Data8_t, outData++);
     PDITransfer(PDI_CMD_LD | POINTER_UNCHANGED | Data8_t, outData);
 
-    uint8_t b = *outData;
+    b = *outData;
     *outData = *(outData-2);
     *(outData-2) = b;
     
     XPRG_Body[1] = XPRG_ERR_OK;
     return 5;
+CRCERROR:
+    XPRG_Body[1] = XPRG_ERR_TIMEOUT;
+    return 2;
 }

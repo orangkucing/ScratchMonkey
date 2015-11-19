@@ -38,6 +38,8 @@ enum {
 #endif
 };
 
+#define TIMEOUT 100
+
 //                                 B0x10pi00 x=rw, p=direct, i=postinc
 #define TPI_CMD_SLD                B00100000
 #define TPI_CMD_SST                B01100000
@@ -228,13 +230,17 @@ TPIDisableTarget(void)
 #endif
 }
 
-static void
+static bool
 WaitWhileNVMControllerBusy(void)
 {
     uint8_t s;
+    uint8_t timeout = TIMEOUT;
     do {
         TPITransfer(TPI_CMD_SIN(SMoXPROG::XPRGParam.NVMCSR), &s);
+        if (timeout-- == 0)
+            return false;
     } while (s & _BV(NVMBSY));
+    return true;
 }
 
 //----------------------------------------------------------------------------------------
@@ -245,7 +251,7 @@ SMoTPI::EnterProgmode()
     /* Enable TPI programming mode with the attached target */
     TPIEnableTarget();
 
-    /* Direction change guard time to 0 USART bits */
+    /* Direction change guard time to 0 CLK bits */
     TPITransfer(TPI_CMD_SSTCS | REG_TPIPCR, (uint8_t)(GT2 | GT1 | GT0));
 
     /* Enable access to the XPROG NVM bus by sending the documented NVM access key to the device */
@@ -304,9 +310,7 @@ SMoTPI::Erase()
     TPITransfer(TPI_CMD_SSTPR | 1, XPRG_Body[4]);
     TPITransfer(TPI_CMD_SST | POINTER_UNCHANGED, (uint8_t)0xFF);
 
-    WaitWhileNVMControllerBusy();
-    
-    XPRG_Body[1] = XPRG_ERR_OK;
+    XPRG_Body[1] = WaitWhileNVMControllerBusy() ? XPRG_ERR_OK : XPRG_ERR_TIMEOUT;
     return 2;
 }
 
@@ -353,7 +357,10 @@ SMoTPI::WriteMem()
                 break;
             TPISendIdle();
         } while (1);
-        WaitWhileNVMControllerBusy();        
+        if (!WaitWhileNVMControllerBusy()) {
+            XPRG_Body[1] = XPRG_ERR_TIMEOUT;
+            return 2;
+        }        
     } while (i < numBytes);
 
     XPRG_Body[1] = XPRG_ERR_OK;

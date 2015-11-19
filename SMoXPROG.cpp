@@ -15,6 +15,7 @@
 // The same license as main part applies.
 
 #include "SMoCommand.h"
+#include "SMoGeneral.h"
 #include "SMoXPROG.h"
 #include "SMoTPI.h"
 #include "SMoPDI.h"
@@ -44,8 +45,8 @@ SetParam()
     case XPRG_PARAM_NVMCSR_REG: // TPI only
         SMoXPROG::XPRGParam.NVMCSR = XPRG_Body[2];
         break;
-    case XPRG_PARAM_UNKNOWN_1: // PDI only
-        SMoXPROG::XPRGParam.unknown = XPRG_Body[2]<<8 | XPRG_Body[3];
+    case XPRG_PARAM_FLASHPAGESIZE: // PDI only (Atmel Studio 5.1 or later)
+        SMoXPROG::XPRGParam.FlashPageSize = XPRG_Body[2]<<8 | XPRG_Body[3];
         break;
     default:
         // not implemented
@@ -93,9 +94,12 @@ SMoXPROG::XPROG()
     case XPRG_MODE_PDI:
         switch (XPROGCommand) {
         case XPRG_CMD_ENTER_PROGMODE:
+            SMoGeneral::gVoltage = 33; // report 3.3V from now on if queried
+            SMoXPROG::XPRGParam.FlashPageSize = 0; // assume the old method
             answerlen = SMoPDI::EnterProgmode();
             break;
         case XPRG_CMD_LEAVE_PROGMODE:
+            SMoGeneral::gVoltage = 50; // report 5.0V from now on if queried
             answerlen = SMoPDI::LeaveProgmode();
             break;
         case XPRG_CMD_ERASE:

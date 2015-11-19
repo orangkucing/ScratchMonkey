@@ -35,6 +35,7 @@ namespace SMoGeneral {
     extern uint8_t  gClockMatch;
     extern uint8_t  gDischargeDelay;
     extern uint8_t  gResetPolarity;
+    extern uint8_t  gVoltage;
     extern uint8_t  gControlStack[];
 
     void    SignOn();

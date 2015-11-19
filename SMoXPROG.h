@@ -21,11 +21,11 @@ namespace SMoXPROG {
     void XPROG();
     void XPROG_SetMode();
     extern struct param_t {
-        uint32_t NVMBase;
-        uint16_t EEPageSize;
-        uint8_t NVMCMD; // Non-Volatile Memory Command Register
-        uint8_t NVMCSR; // Non-Volatile Memory Control and Status Register
-        uint16_t unknown; // since AVRStudio 5.1
+        uint32_t NVMBase; // PDI
+        uint16_t EEPageSize; // PDI
+        uint8_t NVMCMD; // TPI: Non-Volatile Memory Command Register
+        uint8_t NVMCSR; // TPI: Non-Volatile Memory Control and Status Register
+        uint16_t FlashPageSize; // PDI: since AVRStudio 5.1
     } XPRGParam;
 } // namespace SMoXPROG
 
@@ -82,15 +82,15 @@ namespace SMoXPROG {
 #define XPRG_ERR_TIMEOUT                     3
 
 // XPROG parameters of different sizes
-// 4-byte address
+// 4-byte, NVM base address
 #define XPRG_PARAM_NVMBASE                  0x01
-// 2-byte page size
+// 2-byte, EEPROM page size
 #define XPRG_PARAM_EEPPAGESIZE              0x02
-// 1-byte NVMCMD register
-#define XPRG_PARAM_NVMCMD_REG               0x03 // was XPRG_PARAM_TPI_3
-// 1-byte NVMCSR register
-#define XPRG_PARAM_NVMCSR_REG               0x04 // was XPRG_PARAM_TPI_4
-// 2-byte, undocumented
-#define XPRG_PARAM_UNKNOWN_1                0x05
+// 1-byte, TPI NVMCMD_REG offset from NVM base
+#define XPRG_PARAM_NVMCMD_REG               0x03
+// 1-byte, TPI NVMCSR_REG offset from NVM base
+#define XPRG_PARAM_NVMCSR_REG               0x04
+// 2-byte, Flash page size (Atmel Studio 5.1 or later)
+#define XPRG_PARAM_FLASHPAGESIZE            0x05
 
 #endif /* _SMO_XPROG_ */

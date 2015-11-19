@@ -26,7 +26,7 @@ const uint8_t           kBuildNumberHigh    = 0x00;
 const uint8_t           kHardwareVersion    = 0x02;
 const uint8_t           kSoftwareMajor      = 0x02;
 const uint8_t           kSoftwareMinor      = 0x0a;
-const uint8_t           kVoltage            =   50;
+uint8_t     SMoGeneral::gVoltage            = 50;
 uint8_t     SMoGeneral::gSCKDuration        = 2;    // 125kHz
 static uint8_t          gControllerInit     = 0;
 uint8_t     SMoGeneral::gPrescale           = 1;
@@ -49,11 +49,8 @@ SMoGeneral::SetParam()
     switch (SMoCommand::gBody[1]) {
     case PARAM_VTARGET:
     case PARAM_VADJUST:
-        //
-        // Pick any voltage, as long as it's 5V
-        //
-        SMoCommand::SendResponse(value==kVoltage ? STATUS_CMD_OK : STATUS_CMD_FAILED);    
-        return;
+        // just ignore
+        break;
     case PARAM_SCK_DURATION:
         gSCKDuration    = value;
         break;
@@ -101,7 +98,7 @@ SMoGeneral::GetParam()
         break;
     case PARAM_VTARGET:
     case PARAM_VADJUST:
-        result  = kVoltage;
+        result  = gVoltage;
         break;
     case PARAM_SCK_DURATION:
         result  = gSCKDuration;
