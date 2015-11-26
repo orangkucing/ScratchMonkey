@@ -30,7 +30,7 @@ namespace SMoXPROG {
 } // namespace SMoXPROG
 
 #include "SMoCommand.h"
-#define XPRG_Body (SMoCommand::gBody+1)
+#define XPRG_Body ((uint8_t *)(SMoCommand::gBody+1))
 
 // XPROG modes
 #define XPRG_MODE_PDI                       0

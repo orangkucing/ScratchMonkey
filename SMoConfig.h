@@ -56,6 +56,8 @@
 #define SMO_WANT_DEBUG
 #endif
 
+#define DEFAULTTIMEOUT 100UL // default timeout anything (ms)
+
 //
 // Some pins used in multiple modules
 //

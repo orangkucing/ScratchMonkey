@@ -216,7 +216,7 @@ SMoHVSP::EnterProgmode()
 #if defined(SMO_AVCC)
         uint32_t time = millis();
         while (analogRead(SMO_AVCC) > 50) {   // wait until HVSP_VCC become lower than 0.3V
-            if (millis() - time > 100) // timeout
+            if (millis() - time > DEFAULTTIMEOUT) // timeout
                 break;
         }
 #else

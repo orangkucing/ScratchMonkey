@@ -20,8 +20,6 @@
 #include "SMoTPI.h"
 #include "SMoPDI.h"
 
-#define XPRG_Body (SMoCommand::gBody+1)
-
 struct SMoXPROG::param_t SMoXPROG::XPRGParam;
 
 static uint8_t SelectedProtocol = XPRG_MODE_TPI;

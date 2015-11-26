@@ -15,6 +15,7 @@
 // The same license as main part applies.
 
 #include <SPI.h>
+#include <util/parity.h>
 #include "SMoCommand.h"
 #include "SMoGeneral.h"
 #include "SMoConfig.h"
@@ -37,8 +38,6 @@ enum {
     TPI_RESET       = SS,
 #endif
 };
-
-#define TIMEOUT 100
 
 //                                 B0x10pi00 x=rw, p=direct, i=postinc
 #define TPI_CMD_SLD                B00100000
@@ -79,37 +78,52 @@ enum {
 
 static int8_t sPageMask;
 
-inline uint8_t
-Parity(uint8_t d)
-{
-    // compute partiy bit
-    uint8_t par = d;
-    par ^= (par >> 4); // b[7:4] xor b[3:0]
-    par ^= (par >> 2); // b[3:2] xor b[1:0]
-    par ^= (par >> 1); // b[1:1] xor b[0:0]
-    return par & 1;
-}
-
 /*
-* send two byte in one TPI frame (24 bits)
+* send two byte in two TPI frame (24 bits)
 * (1 start + 8 data + 1 parity + 2 stop) * 2
 * using 3 SPI data bytes (3 x 8 = 24 clocks)
 */
 static void
 TPITransfer(uint8_t c, uint8_t d)
 {
-    // REMEMBER: this is in LSBfirst mode and idle is high
-    // (1 start bit) + (c[6:0])
-    SPI.transfer(c << 1);
-    // (c[7:7]) + (1 parity) + (2 stop bits) + (1 start bit) + (d[2:0])
-    SPI.transfer((c >> 7) | (Parity(c) << 1) | B00001100 | (d << 5));
-    // (d[7:3]) + (1 parity) + (2 stop bits)
-    SPI.transfer((d >> 3) | (Parity(d) << 5) | B11000000);
+    union {
+      uint32_t l;
+      uint8_t c[4];
+    } data;
+
+    data.l = 0UL;
+    data.c[1] = d;
+    data.l <<= 4;
+    data.c[0] = c;
+    data.l <<= 1;
+    data.c[1] |= parity_even_bit(c) << 1 | 0x0C;
+    data.c[2] |= parity_even_bit(d) << 5 | 0xC0;
+    SPI.transfer((uint8_t*)&data.c[0], 3);
+}
+
+/*
+* send one byte in one TPI frame (12 bits)
+* 2 idle + 1 start + 8 data + 1 parity + 2 stop + 2 idle
+* using 2 SPI data bytes (2 x 8 = 16 clocks)
+*/
+static void
+_TPITransfer(uint8_t c)
+{
+    union {
+      uint16_t i;
+      uint8_t c[2];
+    } data;
+    
+    data.i = 0U;
+    data.c[0] = c;
+    data.i <<= 3;
+    data.i |= parity_even_bit(c) << 11 | 0xF003;
+    SPI.transfer((uint8_t*)&data.c[0], 2);
 }
 
 /*
 * receive TPI 12-bit format byte data
-* via SPI 2 bytes (16 clocks) or 3 bytes (24 clocks)
+* via SPI 3 bytes (24 clocks)
 */
 static void
 TPITransfer(uint8_t c, uint8_t *p)
@@ -118,38 +132,27 @@ TPITransfer(uint8_t c, uint8_t *p)
       uint16_t i;
       uint8_t c[2];
     } data;
-    SPI.transfer(0xFF); // idle
-    // (4 idle bits) + (1 start bit) + (c[2:0])
-    SPI.transfer(B00001111 | (c << 5));
-    // (c[7:3]) + (1 parity) + (2 stop bits)
-    SPI.transfer((c >> 3) | (Parity(c) << 5) | B11000000);
 
+    _TPITransfer(c);
     do { // wait for the start bit
         data.c[0] = SPI.transfer(0xFF);
     } while (data.c[0] == 0xFF);
     data.c[1] = SPI.transfer(0xFF);
-    // if the first byte data.c[0] contains less than 3 data bits
-    // we need to get a third byte to get the parity and/or stop bits.
-    if ((data.c[0] & B00011111) == B00011111)
-        SPI.transfer(0xFF);
-    // now the received 8 bit data is contained in data.i
+    // now the received 8 bit data is contained in data.c[1:0]
+    // Note: If the position of the start bit is within bit [7:5] of data.c[0]
+    // then 1 - 3 bits of the parity bit and/or stop bits are not received, yet.
+    SPI.transfer(0xFF); // receive remaining bits if any
     while (data.c[0] != 0x7F) {
         data.i <<= 1;
-        data.i |= 1;
+        data.c[0] |= 1;
     }
-    SPI.transfer(0xFF);
-    SPI.transfer(0xFF);
     *p = data.c[1];
 }
 
 static void
 TPISendKey(void)
 {
-    // (4 idle bits) + (1 start bit) + (data0[2:0])
-    SPI.transfer(B00001111 | (TPI_CMD_SKEY << 5));
-    // (data0[7:3]) + (1 parity) + (2 stop bits)
-    SPI.transfer((TPI_CMD_SKEY >> 3) | (Parity(TPI_CMD_SKEY) << 5) | B11000000);
-
+    _TPITransfer(TPI_CMD_SKEY);
     TPITransfer((uint8_t)0xFF, (uint8_t)0x88); // keys
     TPITransfer((uint8_t)0xD8, (uint8_t)0xCD);
     TPITransfer((uint8_t)0x45, (uint8_t)0xAB);
@@ -188,7 +191,7 @@ TPIEnableTarget(void)
 #if defined(SMO_AVCC)
         uint32_t time = millis();
         while (analogRead(SMO_AVCC) > 50) {   // wait until HVPP_VCC become lower than 0.3V
-            if (millis() - time > 100)  // timeout
+            if (millis() - time > DEFAULTTIMEOUT)  // timeout
                 break;
         }
 #else
@@ -234,10 +237,10 @@ static bool
 WaitWhileNVMControllerBusy(void)
 {
     uint8_t s;
-    uint8_t timeout = TIMEOUT;
+    uint32_t time = millis();
     do {
         TPITransfer(TPI_CMD_SIN(SMoXPROG::XPRGParam.NVMCSR), &s);
-        if (timeout-- == 0)
+        if (millis() - time > DEFAULTTIMEOUT)
             return false;
     } while (s & _BV(NVMBSY));
     return true;

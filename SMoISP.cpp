@@ -158,7 +158,7 @@ ISPPollReady()
 {
     uint32_t time = millis();
     while (!SPITransaction(0xF0, 0, 0, 0)) // Poll RDY/BSY
-        if (millis() - time > 100UL)
+        if (millis() - time > DEFAULTTIMEOUT)
             return false;
     return true;
 }
