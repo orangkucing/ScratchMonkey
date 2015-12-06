@@ -126,7 +126,7 @@ HVSPTransfer(uint8_t instrIn, uint8_t dataIn=0)
     // Next bits, data in/out
     //
     for (char i=0; i<7; ++i) {
-        dataOut = (dataOut << 1) | HVSPBit((instrIn & 0x80) != 0, (dataIn & 0x80) != 0);
+        dataOut = dataOut << 1 | HVSPBit((instrIn & 0x80) != 0, (dataIn & 0x80) != 0);
         instrIn <<= 1;
         dataIn  <<= 1;
     }
@@ -283,7 +283,7 @@ SMoHVSP::ChipErase()
 static void
 ProgramMemory(bool flash)
 {
-    uint16_t        numBytes    =  (SMoCommand::gBody[1] << 8) | SMoCommand::gBody[2];
+    uint16_t        numBytes    =  SMoCommand::gBody[1] << 8 | SMoCommand::gBody[2];
     const uint8_t   mode        =   SMoCommand::gBody[3];
     const uint8_t   pollTimeout =   SMoCommand::gBody[4];
     const uint8_t * data        =  &SMoCommand::gBody[5];
@@ -334,7 +334,7 @@ TIMEOUT_ProgramMemory:
 static void
 ReadMemory(bool flash)
 {
-    uint16_t    numBytes    =  (SMoCommand::gBody[1] << 8) | SMoCommand::gBody[2];
+    uint16_t    numBytes    =  SMoCommand::gBody[1] << 8 | SMoCommand::gBody[2];
     uint8_t *   dataOut     =  &SMoCommand::gBody[2];
     
     int8_t b;

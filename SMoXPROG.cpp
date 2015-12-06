@@ -32,10 +32,10 @@ SetParam()
     
     switch (param) {
     case XPRG_PARAM_NVMBASE: // PDI only
-        SMoXPROG::XPRGParam.NVMBase = XPRG_Body[2]<<24 | XPRG_Body[3]<<16 | XPRG_Body[4]<<8 | XPRG_Body[5];
+        SMoXPROG::XPRGParam.NVMBase = (uint32_t)XPRG_Body[2] << 24 | (uint32_t)XPRG_Body[3] << 16 | (uint32_t)XPRG_Body[4] << 8 | (uint32_t)XPRG_Body[5];
         break;
     case XPRG_PARAM_EEPPAGESIZE: // PDI only
-        SMoXPROG::XPRGParam.EEPageSize = XPRG_Body[2]<<8 | XPRG_Body[3];
+        SMoXPROG::XPRGParam.EEPageSize = XPRG_Body[2] << 8 | XPRG_Body[3];
         break;
     case XPRG_PARAM_NVMCMD_REG: // TPI only
         SMoXPROG::XPRGParam.NVMCMD = XPRG_Body[2];
@@ -44,7 +44,7 @@ SetParam()
         SMoXPROG::XPRGParam.NVMCSR = XPRG_Body[2];
         break;
     case XPRG_PARAM_FLASHPAGESIZE: // PDI only (Atmel Studio 5.1 or later)
-        SMoXPROG::XPRGParam.FlashPageSize = XPRG_Body[2]<<8 | XPRG_Body[3];
+        SMoXPROG::XPRGParam.FlashPageSize = XPRG_Body[2] << 8 | XPRG_Body[3];
         break;
     default:
         // not implemented

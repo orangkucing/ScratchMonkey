@@ -74,7 +74,7 @@ SMoCommand::GetNextCommand()
     case kHeaderState:
         if (gBody[4] != TOKEN)
             goto reportHeaderError;
-        sNumBytesWanted = (uint16_t(gBody[2])<<8) | gBody[3];
+        sNumBytesWanted = gBody[2] << 8 | gBody[3];
         if (sNumBytesWanted > kMaxBodySize)
             goto reportHeaderError;
         sState          = kBodyState;

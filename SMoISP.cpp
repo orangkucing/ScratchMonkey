@@ -82,7 +82,7 @@ SPITransfer(uint8_t out)
     if (!sSPILimpMode)
         return SPI.transfer(out); // Hardware SPI
         
-    const int kQuarterCycle = 1<<sSPILimpMode; 
+    const int kQuarterCycle = 1 << sSPILimpMode; 
     uint8_t in = 0;
     for (int i=0; i<8; ++i) {
         digitalWrite(MOSI, (out & 0x80) != 0);
@@ -90,7 +90,7 @@ SPITransfer(uint8_t out)
         delayMicroseconds(kQuarterCycle);
         digitalWrite(SCK, HIGH);
         delayMicroseconds(kQuarterCycle);
-        in = (in << 1) | digitalRead(MISO);
+        in = in << 1 | digitalRead(MISO);
         delayMicroseconds(kQuarterCycle);
         digitalWrite(SCK, LOW);
         delayMicroseconds(kQuarterCycle);        
@@ -313,7 +313,7 @@ SMoISP::ChipErase()
 static void
 ProgramMemory(bool flash)
 {
-    uint16_t  numBytes          =  (SMoCommand::gBody[1]<<8)|SMoCommand::gBody[2];
+    uint16_t  numBytes          =  SMoCommand::gBody[1] << 8 | SMoCommand::gBody[2];
     uint8_t   mode              =   SMoCommand::gBody[3];
     const uint8_t   cmdDelay    =   SMoCommand::gBody[4];
     const uint8_t   cmd1        =   SMoCommand::gBody[5];
@@ -360,9 +360,9 @@ TIMEOUT_ProgramMemory:
 static void
 ReadMemory(bool flash)
 {
-    uint16_t  numBytes    =  (SMoCommand::gBody[1]<<8)|SMoCommand::gBody[2];
+    uint16_t  numBytes    =  SMoCommand::gBody[1] << 8 | SMoCommand::gBody[2];
     const uint8_t   cmd   =   SMoCommand::gBody[3];
-    uint8_t * outData        =  &SMoCommand::gBody[2];
+    uint8_t *outData      =  &SMoCommand::gBody[2];
 
     if (SMoGeneral::gAddress.d.extH & 0x80)
         SPITransaction(0x4D, 0, SMoGeneral::gAddress.d.extL, 0); // Load Extended Address byte

@@ -496,7 +496,7 @@ SMoHVPP::ChipErase()
 static void
 ProgramMemory(bool flash)
 {
-    uint16_t        numBytes    =  (SMoCommand::gBody[1] << 8) | SMoCommand::gBody[2];
+    uint16_t        numBytes    =  SMoCommand::gBody[1] << 8 | SMoCommand::gBody[2];
     const uint8_t   mode        =   SMoCommand::gBody[3];
     const uint8_t   pollTimeout =   SMoCommand::gBody[4];
     const uint8_t * data        =  &SMoCommand::gBody[5];
@@ -550,7 +550,7 @@ TIMEOUT_ProgramMemory:
 static void
 ReadMemory(bool flash)
 {
-    uint16_t    numBytes    =  (SMoCommand::gBody[1] << 8) | SMoCommand::gBody[2];
+    uint16_t    numBytes    =  SMoCommand::gBody[1] << 8 | SMoCommand::gBody[2];
     uint8_t *   dataOut     =  &SMoCommand::gBody[2];
     
     int8_t b;

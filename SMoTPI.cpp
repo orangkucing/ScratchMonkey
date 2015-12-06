@@ -311,7 +311,7 @@ SMoTPI::Erase()
 
     TPITransfer(TPI_CMD_SSTPR | 0, XPRG_Body[5] | 1);
     TPITransfer(TPI_CMD_SSTPR | 1, XPRG_Body[4]);
-    TPITransfer(TPI_CMD_SST | POINTER_UNCHANGED, (uint8_t)0xFF);
+    TPITransfer(TPI_CMD_SST | POINTER_UNCHANGED, (uint8_t)0x55); // dummy write
 
     XPRG_Body[1] = WaitWhileNVMControllerBusy() ? XPRG_ERR_OK : XPRG_ERR_TIMEOUT;
     return 2;
@@ -326,7 +326,7 @@ SMoTPI::WriteMem()
     //SMoGeneral::gAddress.c[2] = XPRG_Body[4];
     //SMoGeneral::gAddress.c[1] = XPRG_Body[5];
     //SMoGeneral::gAddress.c[0] = XPRG_Body[6];
-    uint16_t numBytes = (XPRG_Body[7]<<8)|XPRG_Body[8];
+    uint16_t numBytes = XPRG_Body[7] << 8 | XPRG_Body[8];
     uint8_t *data = &XPRG_Body[9];
 
     int8_t writeSize = memcode == XPRG_MEM_TYPE_LOCKBITS ? 1 : sPageMask;
@@ -378,7 +378,7 @@ SMoTPI::ReadMem()
     //SMoGeneral::gAddress.c[2] = XPRG_Body[3];
     //SMoGeneral::gAddress.c[1] = XPRG_Body[4];
     //SMoGeneral::gAddress.c[0] = XPRG_Body[5];
-    uint16_t numBytes = (XPRG_Body[6]<<8)|XPRG_Body[7];
+    uint16_t numBytes = XPRG_Body[6] << 8 | XPRG_Body[7];
     uint8_t *outData = &XPRG_Body[2];
     
     /* Set the NVM control register to the NO OP command for memory reading */

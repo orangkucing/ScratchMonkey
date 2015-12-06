@@ -209,7 +209,7 @@ MOSI_TRISTATE(void)
 inline void
 MOSI_GATE_INIT(void)
 {
-    PORTD &= ~_BV(2); // gate closed   
+    PORTD &= ~_BV(2); // MOSI tristate  
     DDRD |= _BV(2);
 }
 
@@ -239,6 +239,8 @@ ISR(TIMER_COMP_vect)
 inline void
 HeartBeatOn(void)
 {
+    delayMicroseconds(5);
+/*
     noInterrupts();
     // Set timer operation mode and prescaler 1/8
 #if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
@@ -252,11 +254,24 @@ HeartBeatOn(void)
 #endif
    SPCR &= ~_BV(SPE);         // temporary disable SPI
    interrupts();
+ */
+#ifdef TCCR2
+    TCCR2  = _BV(COM20) | _BV(WGM21);  // Stop Timer 2
+    TCNT2  = 0xFF;  // Reset counter value
+    // CTC mode, Toggle OC2 on Compare Match. Set timer operation mode and prescaler
+    TCCR2  = _BV(COM20) | _BV(WGM21) | _BV(CS20);
+#else
+    TCCR2B = 0;                        // Stop Timer 2
+    TCNT2 = 0xFF;  // Reset counter value
+    TCCR2B = _BV(CS20);// Set timer operation mode and prescaler
+#endif
+    PORTB |= _BV(0); // XTAL1
 }
 
 inline void
 HeartBeatOff(void)
 {
+/*
     noInterrupts();
 #if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
 #if defined(TCCR2)
@@ -269,14 +284,39 @@ HeartBeatOff(void)
 #endif
     SPCR |= _BV(SPE);         // enable SPI again
     interrupts();
+*/
+#ifdef TCCR2
+    TCCR2  = _BV(COM20) | _BV(WGM21);  // Stop Timer 2
+#else
+    TCCR2B = 0;                        // Stop Timer 2
+#endif
+    delayMicroseconds(5);
+    PORTB &= ~_BV(0); // SPI CLK
 }
 
 static void
 EnableHeartBeat(void)
-{    
-    SPI.transfer(0xFF);
-    SPI.transfer(0xFF);
+{
+    DDRD |= _BV(7);
 
+#define CMV 64
+#ifdef TCCR2
+    TCCR2  = _BV(COM20) | _BV(WGM21);  // Stop Timer 2
+    TCNT2  = 0xFF;                     // Initialize counter value
+    OCR2   = CMV;  // Set compare match value
+    // CTC mode, Toggle OC2 on Compare Match. Set timer operation mode and prescaler
+    TCCR2  = _BV(COM20) | _BV(WGM21) | _BV(CS20);
+#else
+    TCCR2B = 0;                        // Stop Timer 2
+    TCCR2A = _BV(COM2A0) | _BV(WGM21); // CTC mode, Toggle OC2A on Compare Match
+    TCNT2  = 0xFF;                     // Initialize counter value
+    OCR2A  = CMV;  // Set compare match value
+    TCCR2B = _BV(CS20);// Set timer operation mode and prescaler
+#endif
+    delayMicroseconds(50); // set PDI_DATA high for < 100us to disable RESET function on PDI_CLK
+    PORTB |= _BV(0); // XTAL1
+    delayMicroseconds(500);
+/*
     // to keep the established PDI connection active we must send dummy pulse periodically
     noInterrupts();
     // start timer
@@ -312,13 +352,19 @@ EnableHeartBeat(void)
     TIMSK1 |= _BV(OCIE1A);             // TIMER1_COMPA interrupt enabled
     TCCR1B = _BV(CS11);                // Set timer operation mode and Prescaler 1/8
 #endif
-    interrupts();
+    interrupts(); */
 }
 
 static void
 DisableHeartBeat(void)
 {
-    // stop timer
+#ifdef TCCR2
+    TCCR2  = 0;
+#else
+    TCCR2B = 0;
+    TCCR2A = 0;
+#endif
+/*    // stop timer
     noInterrupts();
 #if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
 #if defined(TCCR2)
@@ -333,32 +379,7 @@ DisableHeartBeat(void)
     TIMSK1 &= ~_BV(OCIE1A);
     TCCR1B = 0;
 #endif
-    interrupts();
-}
-
-/*
-* send two byte in two PDI frame (24 bits)
-* (1 start + 8 data + 1 parity + 2 stop) * 2
-* using 3 SPI data bytes (3 x 8 = 24 clocks)
-*/
-static void
-PDITransfer(uint8_t c, uint8_t d)
-{
-    union {
-      uint32_t l;
-      uint8_t c[4];
-    } data;
-
-    data.l = 0UL;
-    data.c[1] = d;
-    data.l <<= 4;
-    data.c[0] = c;
-    data.l <<= 1;
-    data.c[1] |= parity_even_bit(c) << 1 | 0x0C;
-    data.c[2] |= parity_even_bit(d) << 5 | 0xC0;
-    HeartBeatOff();
-    SPI.transfer((uint8_t*)&data.c[0], 3);
-    HeartBeatOn();
+    interrupts(); */
 }
 
 /*
@@ -367,7 +388,7 @@ PDITransfer(uint8_t c, uint8_t d)
 * using 2 SPI data bytes (2 x 8 = 16 clocks)
 */
 static void
-PDITransfer(uint8_t c)
+PDITransfer(uint8_t d, bool cont=false)
 {
     union {
       uint16_t i;
@@ -375,126 +396,104 @@ PDITransfer(uint8_t c)
     } data;
 
     data.i = 0U;
-    data.c[0] = c;
+    data.c[0] = d;
     data.i <<= 5;
-    data.i |= parity_even_bit(c) << 13 | 0xC00F;
+    data.i |= parity_even_bit(d) << 13 | 0xC00F;
     HeartBeatOff();
     SPI.transfer((uint8_t*)&data.c[0], 2);
-    // ******HeartBeat is OFF and return******
-}
-
-// send three bytes
-static void
-PDITransfer(uint8_t c, uint8_t d, uint8_t e)
-{
-    PDITransfer(c);
-    PDITransfer(d, static_cast<uint8_t>(e));
+    if (!cont)
+        HeartBeatOn();
 }
 
 /*
 * receive PDI 12-bit format byte data
 */
 static void
-PDITransfer(uint8_t c, uint8_t *p, uint8_t n)
+PDILoad(uint8_t c, uint8_t *p, uint8_t n)
 {
     union {
       uint32_t l;
       uint8_t c[4];
     } data;
     uint8_t b;
-
-    PDITransfer(c);
+ 
+    PDITransfer(c, true);
     MOSI_TRISTATE();
     data.c[1] = SPI.transfer(0xFF);
     do {
-        while (data.c[1] == 0xFF) { // wait for the start bit
+        while (data.c[1] == 0xFF) // wait for the start bit
             data.c[1] = SPI.transfer(0xFF);
-        }
-        data.c[2] = SPI.transfer(0xFF);
-        // now the received 8 bit data is contained in data.l
         b = 0;
         data.c[0] = 0xFF;
+        data.c[2] = SPI.transfer(0xFF);
+        // now the received 8 bit data is contained in data.l
         while (data.c[1] != 0x7F) {
-            b++;
             data.l <<= 1;
+            b++;
         }
-        *p = data.c[2];
-        if (b < 3) {
-            data.c[2] = SPI.transfer(0xFF);
-            data.l <<= b;
-            b += 8;
+        *p++ = data.c[2];
+        if (b > 3) {
+            data.c[2] = 0xFF;
+            data.c[3] |= B00000111; // overwrite parity bit and stop bits to 1
+            data.l >>= 8 + b;           
         } else {
-            data.c[2] = data.c[3];
-            data.c[1] = 0xFF;
+            data.c[1] = SPI.transfer(0xFF) | B00000111 >> b;
         }
-        p++;
-        if (!n--)
-            break;
-        data.c[2] |= B00000111; // overwrite parity bit and stop bits to 1
-        data.l >>= b;
-    } while (1);
+    } while (n--);
     MOSI_ACTIVE();
     HeartBeatOn();
 }
 
 static void
-PDITransfer(uint8_t c, uint32_t a, uint8_t *p)
+PDIStore(uint8_t d, uint8_t e)
 {
-    PDITransfer(c, static_cast<uint8_t>(a & 0xFF));
-    PDITransfer((a >> 8) & 0xFF, static_cast<uint8_t>((a >> 16) & 0xFF));
-    PDITransfer((a >> 24) & 0xFF, static_cast<uint8_t*>(p), static_cast<uint8_t>(0));
+    PDITransfer(d);
+    PDITransfer(e);
 }
 
 static void
-PDITransfer(uint8_t c, uint32_t a)
+PDILoadS(uint8_t c, uint32_t a, uint8_t *p)
 {
-    // 5 = 3 + 2
-    PDITransfer(c, static_cast<uint8_t>(a & 0xFF), static_cast<uint8_t>((a >> 8) & 0xFF));
-    PDITransfer((a >> 16) & 0xFF, static_cast<uint8_t>((a >> 24) & 0xFF));
+    PDIStore(c, a & 0xFF);
+    PDIStore((a >> 8) & 0xFF, (a >> 16) & 0xFF);
+    PDILoad((a >> 24) & 0xFF, p, 0);
 }
 
 static void
-PDITransfer(uint8_t c, uint32_t a, uint8_t d)
+PDIStoreS(uint8_t c, uint32_t a)
 {
-    // 6 = 2 + 2 + 2
-    PDITransfer(c, static_cast<uint8_t>(a & 0xFF));
-    PDITransfer((a >> 8) & 0xFF, static_cast<uint8_t>((a >> 16) & 0xFF));
-    PDITransfer((a >> 24) & 0xFF, static_cast<uint8_t>(d));
+    PDITransfer(c);
+    PDIStore(a & 0xFF, (a >> 8) & 0xFF);
+    PDIStore((a >> 16) & 0xFF, (a >> 24) & 0xFF);
 }
 
 static void
 PDISendKey(void)
 {
-    // 1 + 8 = 3 + 2 + 2 + 2
-    PDITransfer(PDI_CMD_KEY, static_cast<uint8_t>(0xFF), static_cast<uint8_t>(0x88));
-    PDITransfer(0xD8, static_cast<uint8_t>(0xCD));
-    PDITransfer(0x45, static_cast<uint8_t>(0xAB));
-    PDITransfer(0x89, static_cast<uint8_t>(0x12));
+    PDITransfer(PDI_CMD_KEY);
+    PDIStore(0xFF, 0x88);
+    PDIStore(0xD8, 0xCD);
+    PDIStore(0x45, 0xAB);
+    PDIStore(0x89, 0x12);
 }
 
 static void
 PDIEnableTarget(void)
 {
+    DDRB |= _BV(0);
+    PORTB |= _BV(0); // XTAL1
 #if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
     // make sure that 12V regulator is shutdown 
     digitalWrite(SMO_HVENABLE, LOW);
     pinMode(SMO_HVENABLE, OUTPUT);
 #endif
-    MOSI_GATE_INIT(); // GATE closed
-    digitalWrite(MISO, LOW);
-    pinMode(MISO, OUTPUT); // release pullup if any
-    pinMode(MISO, INPUT); // there's an internal pull-down in PDI_DATA
-    digitalWrite(MOSI, LOW);
-    pinMode(MOSI, OUTPUT);
-    MOSI_ACTIVE(); // Gate open
-    pinMode(SCK, INPUT);
-    delayMicroseconds(10); // set PDI_DATA low for a while
-    digitalWrite(MOSI, HIGH);
-    delayMicroseconds(5); // set PDI_DATA high for < 100us to disable RESET function on PDI_CLK
-    // to avoid glitch in SCK and MOSI we must set CPOL before SPI.begin()
-    SPCR |= SPI_MODE3; // idle HIGH for SPI_MODE3
+    MOSI_GATE_INIT(); // MOSI tristate
+    SPDR = 0xFF;
     SPI.begin();
-    SPI.beginTransaction(SPISettings(2000000, LSBFIRST, SPI_MODE3));
+    SPI.beginTransaction(SPISettings(100000, LSBFIRST, SPI_MODE3));
+    delay(100); // set PDI_DATA low for a while
+    PORTB &= ~_BV(0); // SPI CLK
+    MOSI_ACTIVE(); // Gate open
     EnableHeartBeat();
 }
 
@@ -516,7 +515,7 @@ WaitUntilNVMActive(void)
     do {
         if (millis() - time > DEFAULTTIMEOUT)
             return false;
-        PDITransfer(PDI_CMD_LDCS | REG_STATUS, static_cast<uint8_t*>(&s), static_cast<uint8_t>(0));
+        PDILoad(PDI_CMD_LDCS | REG_STATUS, &s, 0);
     } while (!(s & _BV(NVMEN)));
     return true;
 }
@@ -530,7 +529,7 @@ WaitWhileNVMControllerBusy(void)
         if (millis() - time > DEFAULTTIMEOUT)
             return false;
         // in order to preserve the PDI pointer register we use direct addressing
-        PDITransfer(PDI_CMD_LDS | Addr32_t | Data8_t, static_cast<uint32_t>(SMoXPROG::XPRGParam.NVMBase + NVMREG_STATUS), static_cast<uint8_t*>(&s));
+        PDILoadS(PDI_CMD_LDS | Addr32_t | Data8_t, SMoXPROG::XPRGParam.NVMBase + NVMREG_STATUS, &s);
     } while (s & _BV(NVMBSY));
     return true;
 }
@@ -540,35 +539,28 @@ WaitWhileNVMControllerBusy(void)
 uint16_t
 SMoPDI::EnterProgmode()
 {
-    /* Enable PDI programming mode with the attached target */
-    PDIEnableTarget();
-
-    /* Store the RESET key into the RESET PDI registor */
-    PDITransfer(PDI_CMD_STCS | REG_RESET, static_cast<uint8_t>(0x59)); // reset key
+    uint8_t s;
     
-    /* Direction change guard time to 2 CLK bits */
-    PDITransfer(PDI_CMD_STCS | REG_CTRL, static_cast<uint8_t>(7));
-
-    /* Enable access to the XPROG NVM bus by sending the documented NVM access key to the device */
+    PDIEnableTarget();
+    /* Direction change guard time to 32 CLK bits */
+    PDIStore(PDI_CMD_STCS | REG_CTRL, 2);
+    PDIStore(PDI_CMD_STCS | REG_RESET, 0x59); // reset key
     PDISendKey();
- 
-    XPRG_Body[1] = WaitUntilNVMActive() ? XPRG_ERR_OK : XPRG_ERR_TIMEOUT;
+    if (!WaitUntilNVMActive())
+        goto EnterProgmodeERROR;
+    XPRG_Body[1] = XPRG_ERR_OK;
+    return 2;
+    
+EnterProgmodeERROR:
+    XPRG_Body[1] = XPRG_ERR_TIMEOUT;
     return 2;
 }
 
 uint16_t
 SMoPDI::LeaveProgmode()
 {
-    uint8_t s;
-    uint32_t time;
-
-    time = millis();        
-    do {
-        PDITransfer(PDI_CMD_STCS | REG_RESET, static_cast<uint8_t>(0x00));
-        PDITransfer(PDI_CMD_LDCS | REG_RESET, static_cast<uint8_t*>(&s), static_cast<uint8_t>(0));
-        if (millis() - time > DEFAULTTIMEOUT)
-            goto LeaveProgmodeERROR;
-    } while (s);
+    PDIStore(PDI_CMD_STCS | REG_RESET, 0);
+    PDIStore(PDI_CMD_STCS | REG_STATUS, _BV(NVMEN));
     PDIDisableTarget();
     XPRG_Body[1] = XPRG_ERR_OK;
     return 2;    
@@ -623,18 +615,18 @@ SMoPDI::Erase()
     break;
     }
  
-    PDITransfer(PDI_CMD_STS | Addr32_t | Data8_t, static_cast<uint32_t>(SMoXPROG::XPRGParam.NVMBase + NVMREG_CMD), static_cast<uint8_t>(command));
-    if (command == CHIP_ERASE)
-        PDITransfer(PDI_CMD_STS | Addr32_t | Data8_t, static_cast<uint32_t>(SMoXPROG::XPRGParam.NVMBase + NVMREG_CTRLA), static_cast<uint8_t>(_BV(CMDEX)));
-    else
-        PDITransfer(PDI_CMD_STS | Addr32_t | Data8_t, static_cast<uint32_t>(SMoGeneral::gAddress.l), static_cast<uint8_t>(0xFF)); // dummy write
+    PDIStoreS(PDI_CMD_STS | Addr32_t | Data8_t, SMoXPROG::XPRGParam.NVMBase + NVMREG_CMD); PDITransfer(command);
+    if (command == CHIP_ERASE) {
+        PDIStoreS(PDI_CMD_STS | Addr32_t | Data8_t, SMoXPROG::XPRGParam.NVMBase + NVMREG_CTRLA); PDITransfer(_BV(CMDEX));
+    } else {
+        PDIStoreS(PDI_CMD_STS | Addr32_t | Data8_t, SMoGeneral::gAddress.l); PDITransfer(0x55); // dummy write
+    }
     if (command == CHIP_ERASE) {
         if (!WaitUntilNVMActive()) {
             XPRG_Body[1] = XPRG_ERR_TIMEOUT;
             return 2;
         }
     }
-
     XPRG_Body[1] = WaitWhileNVMControllerBusy() ? XPRG_ERR_OK : XPRG_ERR_TIMEOUT;
     return 2;
 }
@@ -690,7 +682,7 @@ SMoPDI::WriteMem()
     SMoGeneral::gAddress.c[2] = XPRG_Body[4];
     SMoGeneral::gAddress.c[1] = XPRG_Body[5];
     SMoGeneral::gAddress.c[0] = XPRG_Body[6];
-    uint16_t numBytes = (XPRG_Body[7]<<8)|XPRG_Body[8];
+    uint16_t numBytes = XPRG_Body[7] << 8 | XPRG_Body[8];
     uint8_t *data = &XPRG_Body[9];
     
     uint8_t command = LOAD_FLASH_BUFFER;
@@ -743,17 +735,18 @@ SMoPDI::WriteMem()
         //     2. Executing the WRITE_XXXX_PAGE or ERASE_WRITE_XXXX_PAGE command
         //     3. Executing the WRITE_USER_SIG_ROW or WRITE_LOCK_BITS command
         //
-        PDITransfer(PDI_CMD_STS | Addr32_t | Data8_t, static_cast<uint32_t>(SMoXPROG::XPRGParam.NVMBase + NVMREG_CMD), static_cast<uint8_t>(command));
-        PDITransfer(PDI_CMD_ST | POINTER_REG | Data32_t, static_cast<uint32_t>(SMoGeneral::gAddress.l));
+        PDIStoreS(PDI_CMD_STS | Addr32_t | Data8_t, SMoXPROG::XPRGParam.NVMBase + NVMREG_CMD); PDITransfer(command);
+        PDIStoreS(PDI_CMD_ST | POINTER_REG | Data32_t, SMoGeneral::gAddress.l);
         do {
-            PDITransfer(PDI_CMD_REPEAT | Data8_t, static_cast<uint8_t>(sendMask - (uint8_t)(SMoGeneral::gAddress.l & sendMask)), static_cast<uint8_t>(PDI_CMD_ST | POINTER_POST_INC | Data8_t));
+            PDIStore(PDI_CMD_REPEAT | Data8_t, sendMask - (uint8_t)(SMoGeneral::gAddress.l & sendMask));
+            PDITransfer(PDI_CMD_ST | POINTER_POST_INC | Data8_t);
             do {
                 if (numBytes) {
-                    PDITransfer(*data, static_cast<uint8_t>(*(data+1)));
+                    PDIStore(*data, *(data+1));
                     data += 2;
                     numBytes -= 2;
                 } else {
-                    PDITransfer(0xFF, static_cast<uint8_t>(0xFF));
+                    PDIStore(0xFF, 0xFF);
                 }
                 SMoGeneral::gAddress.l += 2;
             } while (SMoGeneral::gAddress.l & sendMask);
@@ -761,22 +754,21 @@ SMoPDI::WriteMem()
                 goto WriteMemERROR;
             if ((numBytes == 0 || !(SMoGeneral::gAddress.l & pageMask)) && mode & _BV(XPRG_MEM_WRITE_WRITE)) {
                 // write page
-                PDITransfer(PDI_CMD_STS | Addr32_t | Data8_t, static_cast<uint32_t>(SMoXPROG::XPRGParam.NVMBase + NVMREG_CMD), static_cast<uint8_t>(commit));
-                PDITransfer(PDI_CMD_STS | Addr32_t | Data8_t, static_cast<uint32_t>(startAddress), static_cast<uint8_t>(0xFF)); // dummy write
+                PDIStoreS(PDI_CMD_STS | Addr32_t | Data8_t, SMoXPROG::XPRGParam.NVMBase + NVMREG_CMD); PDITransfer(commit);
+                PDIStoreS(PDI_CMD_STS | Addr32_t | Data8_t, startAddress); PDITransfer(0x55); // dummy write
                 if (!WaitWhileNVMControllerBusy())
                     goto WriteMemERROR;
             }
         } while (numBytes);
     } else { // Byte mode
-        PDITransfer(PDI_CMD_STS | Addr32_t | Data8_t, static_cast<uint32_t>(SMoXPROG::XPRGParam.NVMBase + NVMREG_CMD), static_cast<uint8_t>(command));
-        PDITransfer(PDI_CMD_ST | POINTER_REG | Data32_t, static_cast<uint32_t>(SMoGeneral::gAddress.l));            
+        PDIStoreS(PDI_CMD_STS | Addr32_t | Data8_t, SMoXPROG::XPRGParam.NVMBase + NVMREG_CMD); PDITransfer(command);
+        PDIStoreS(PDI_CMD_ST | POINTER_REG | Data32_t, SMoGeneral::gAddress.l);            
         do {
-            PDITransfer(PDI_CMD_ST | POINTER_POST_INC | Data8_t, static_cast<uint8_t>(*data++));
+            PDIStore(PDI_CMD_ST | POINTER_POST_INC | Data8_t, *data++);
             if (!WaitWhileNVMControllerBusy())
                 goto WriteMemERROR;
         } while (--numBytes);
     }    
-
     XPRG_Body[1] = XPRG_ERR_OK;
     return 2;
 
@@ -793,7 +785,7 @@ SMoPDI::ReadMem()
     SMoGeneral::gAddress.c[2] = XPRG_Body[3];
     SMoGeneral::gAddress.c[1] = XPRG_Body[4];
     SMoGeneral::gAddress.c[0] = XPRG_Body[5];
-    uint16_t numBytes = (XPRG_Body[6]<<8)|XPRG_Body[7];
+    uint16_t numBytes = XPRG_Body[6] << 8 | XPRG_Body[7];
 
     uint8_t command;
     switch (type) {
@@ -819,17 +811,14 @@ SMoPDI::ReadMem()
         return 2;
     }
 
-    PDITransfer(PDI_CMD_STS | Addr32_t | Data8_t, static_cast<uint32_t>(SMoXPROG::XPRGParam.NVMBase + NVMREG_CMD), static_cast<uint8_t>(command));
-    PDITransfer(PDI_CMD_ST | POINTER_REG | Data32_t, static_cast<uint32_t>(SMoGeneral::gAddress.l));
-    PDITransfer(PDI_CMD_REPEAT | Data8_t, static_cast<uint8_t>(numBytes - 1));
-    PDITransfer(PDI_CMD_LD | POINTER_POST_INC | Data8_t, static_cast<uint8_t*>(&XPRG_Body[2]), static_cast<uint8_t>(numBytes - 1));
-    
+    PDIStoreS(PDI_CMD_STS | Addr32_t | Data8_t, SMoXPROG::XPRGParam.NVMBase + NVMREG_CMD); PDITransfer(command);
+    PDIStoreS(PDI_CMD_ST | POINTER_REG | Data32_t, SMoGeneral::gAddress.l);
+    if (numBytes > 1)
+        PDIStore(PDI_CMD_REPEAT | Data8_t, numBytes - 1);
+    PDILoad(PDI_CMD_LD | POINTER_POST_INC | Data8_t, &XPRG_Body[2], numBytes - 1);
+
     XPRG_Body[1] = XPRG_ERR_OK;
     return numBytes + 2;
-
-ReadMemERROR:
-    XPRG_Body[1] = XPRG_ERR_TIMEOUT;
-    return 2;
 }
 
 uint16_t
@@ -854,14 +843,13 @@ SMoPDI::CRC()
         return 2;
     }
 
-    PDITransfer(PDI_CMD_STS | Addr32_t | Data8_t, static_cast<uint32_t>(SMoXPROG::XPRGParam.NVMBase + NVMREG_CMD), static_cast<uint8_t>(command));
-    PDITransfer(PDI_CMD_STS | Addr32_t | Data8_t, static_cast<uint32_t>(SMoXPROG::XPRGParam.NVMBase + NVMREG_CTRLA), static_cast<uint8_t>(_BV(CMDEX)));
+    PDIStoreS(PDI_CMD_STS | Addr32_t | Data8_t, SMoXPROG::XPRGParam.NVMBase + NVMREG_CMD); PDITransfer(command);
+    PDIStoreS(PDI_CMD_STS | Addr32_t | Data8_t, SMoXPROG::XPRGParam.NVMBase + NVMREG_CTRLA); PDITransfer(_BV(CMDEX));
     if (command == FLASH_CRC && !WaitUntilNVMActive() || !WaitWhileNVMControllerBusy())
         goto CRCERROR;
-    PDITransfer(PDI_CMD_LDS | Addr32_t | Data8_t, static_cast<uint32_t>(SMoXPROG::XPRGParam.NVMBase + NVMREG_DATA2), static_cast<uint8_t*>(outData++));
-    PDITransfer(PDI_CMD_LDS | Addr32_t | Data8_t, static_cast<uint32_t>(SMoXPROG::XPRGParam.NVMBase + NVMREG_DATA1), static_cast<uint8_t*>(outData++));
-    PDITransfer(PDI_CMD_LDS | Addr32_t | Data8_t, static_cast<uint32_t>(SMoXPROG::XPRGParam.NVMBase + NVMREG_DATA0), static_cast<uint8_t*>(outData++));
-    
+    PDILoadS(PDI_CMD_LDS | Addr32_t | Data8_t, SMoXPROG::XPRGParam.NVMBase + NVMREG_DATA2, outData++);
+    PDILoadS(PDI_CMD_LDS | Addr32_t | Data8_t, SMoXPROG::XPRGParam.NVMBase + NVMREG_DATA1, outData++);
+    PDILoadS(PDI_CMD_LDS | Addr32_t | Data8_t, SMoXPROG::XPRGParam.NVMBase + NVMREG_DATA0, outData++);
     XPRG_Body[1] = XPRG_ERR_OK;
     return 5;
 
