@@ -239,8 +239,6 @@ ISR(TIMER_COMP_vect)
 inline void
 HeartBeatOn(void)
 {
-    delayMicroseconds(5);
-/*
     noInterrupts();
     // Set timer operation mode and prescaler 1/8
 #if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
@@ -254,24 +252,11 @@ HeartBeatOn(void)
 #endif
    SPCR &= ~_BV(SPE);         // temporary disable SPI
    interrupts();
- */
-#ifdef TCCR2
-    TCCR2  = _BV(COM20) | _BV(WGM21);  // Stop Timer 2
-    TCNT2  = 0xFF;  // Reset counter value
-    // CTC mode, Toggle OC2 on Compare Match. Set timer operation mode and prescaler
-    TCCR2  = _BV(COM20) | _BV(WGM21) | _BV(CS20);
-#else
-    TCCR2B = 0;                        // Stop Timer 2
-    TCNT2 = 0xFF;  // Reset counter value
-    TCCR2B = _BV(CS20);// Set timer operation mode and prescaler
-#endif
-    PORTB |= _BV(0); // XTAL1
 }
 
 inline void
 HeartBeatOff(void)
 {
-/*
     noInterrupts();
 #if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
 #if defined(TCCR2)
@@ -284,39 +269,15 @@ HeartBeatOff(void)
 #endif
     SPCR |= _BV(SPE);         // enable SPI again
     interrupts();
-*/
-#ifdef TCCR2
-    TCCR2  = _BV(COM20) | _BV(WGM21);  // Stop Timer 2
-#else
-    TCCR2B = 0;                        // Stop Timer 2
-#endif
-    delayMicroseconds(5);
-    PORTB &= ~_BV(0); // SPI CLK
 }
 
 static void
 EnableHeartBeat(void)
 {
-    DDRD |= _BV(7);
+    delayMicroseconds(90); // set PDI_DATA high for < 100us to disable RESET function on PDI_CLK
+    SPI.transfer(0xFF);
+    SPI.transfer(0xFF);
 
-#define CMV 64
-#ifdef TCCR2
-    TCCR2  = _BV(COM20) | _BV(WGM21);  // Stop Timer 2
-    TCNT2  = 0xFF;                     // Initialize counter value
-    OCR2   = CMV;  // Set compare match value
-    // CTC mode, Toggle OC2 on Compare Match. Set timer operation mode and prescaler
-    TCCR2  = _BV(COM20) | _BV(WGM21) | _BV(CS20);
-#else
-    TCCR2B = 0;                        // Stop Timer 2
-    TCCR2A = _BV(COM2A0) | _BV(WGM21); // CTC mode, Toggle OC2A on Compare Match
-    TCNT2  = 0xFF;                     // Initialize counter value
-    OCR2A  = CMV;  // Set compare match value
-    TCCR2B = _BV(CS20);// Set timer operation mode and prescaler
-#endif
-    delayMicroseconds(50); // set PDI_DATA high for < 100us to disable RESET function on PDI_CLK
-    PORTB |= _BV(0); // XTAL1
-    delayMicroseconds(500);
-/*
     // to keep the established PDI connection active we must send dummy pulse periodically
     noInterrupts();
     // start timer
@@ -352,19 +313,13 @@ EnableHeartBeat(void)
     TIMSK1 |= _BV(OCIE1A);             // TIMER1_COMPA interrupt enabled
     TCCR1B = _BV(CS11);                // Set timer operation mode and Prescaler 1/8
 #endif
-    interrupts(); */
+    interrupts();
 }
 
 static void
 DisableHeartBeat(void)
 {
-#ifdef TCCR2
-    TCCR2  = 0;
-#else
-    TCCR2B = 0;
-    TCCR2A = 0;
-#endif
-/*    // stop timer
+    // stop timer
     noInterrupts();
 #if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
 #if defined(TCCR2)
@@ -379,7 +334,7 @@ DisableHeartBeat(void)
     TIMSK1 &= ~_BV(OCIE1A);
     TCCR1B = 0;
 #endif
-    interrupts(); */
+    interrupts();
 }
 
 /*
@@ -480,19 +435,18 @@ PDISendKey(void)
 static void
 PDIEnableTarget(void)
 {
-    DDRB |= _BV(0);
-    PORTB |= _BV(0); // XTAL1
 #if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
     // make sure that 12V regulator is shutdown 
     digitalWrite(SMO_HVENABLE, LOW);
     pinMode(SMO_HVENABLE, OUTPUT);
 #endif
     MOSI_GATE_INIT(); // MOSI tristate
-    SPDR = 0xFF;
+    digitalWrite(MOSI, HIGH); // to keep MOSI HIGH during the period from HeartBeatOn() to HeartBeatOff()
+    pinMode(MOSI, OUTPUT);
+    SPDR = 0xFF; // to keep MOSI HIGH before the first data is shifted out from SPI
     SPI.begin();
-    SPI.beginTransaction(SPISettings(100000, LSBFIRST, SPI_MODE3));
+    SPI.beginTransaction(SPISettings(20000000, LSBFIRST, SPI_MODE3));
     delay(100); // set PDI_DATA low for a while
-    PORTB &= ~_BV(0); // SPI CLK
     MOSI_ACTIVE(); // Gate open
     EnableHeartBeat();
 }
@@ -542,8 +496,8 @@ SMoPDI::EnterProgmode()
     uint8_t s;
     
     PDIEnableTarget();
-    /* Direction change guard time to 32 CLK bits */
-    PDIStore(PDI_CMD_STCS | REG_CTRL, 2);
+    /* Direction change guard time to 2 CLK bits */
+    PDIStore(PDI_CMD_STCS | REG_CTRL, _BV(GT2) | _BV(GT1));
     PDIStore(PDI_CMD_STCS | REG_RESET, 0x59); // reset key
     PDISendKey();
     if (!WaitUntilNVMActive())

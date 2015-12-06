@@ -313,15 +313,15 @@ SMoISP::ChipErase()
 static void
 ProgramMemory(bool flash)
 {
-    uint16_t  numBytes          =  SMoCommand::gBody[1] << 8 | SMoCommand::gBody[2];
-    uint8_t   mode              =   SMoCommand::gBody[3];
-    const uint8_t   cmdDelay    =   SMoCommand::gBody[4];
-    const uint8_t   cmd1        =   SMoCommand::gBody[5];
-    const uint8_t   cmd2        =   SMoCommand::gBody[6];
-    const uint8_t   cmd3        =   SMoCommand::gBody[7];
-    const uint8_t   pollVal1    =   SMoCommand::gBody[8];
-    const uint8_t   pollVal2    =   SMoCommand::gBody[9];
-    const uint8_t * data        =  &SMoCommand::gBody[10];
+    uint16_t  numBytes          = SMoCommand::gBody[1] << 8 | SMoCommand::gBody[2];
+    uint8_t   mode              = SMoCommand::gBody[3];
+    const uint8_t   cmdDelay    = SMoCommand::gBody[4];
+    const uint8_t   cmd1        = SMoCommand::gBody[5];
+    const uint8_t   cmd2        = SMoCommand::gBody[6];
+    const uint8_t   cmd3        = SMoCommand::gBody[7];
+    const uint8_t   pollVal1    = SMoCommand::gBody[8];
+    const uint8_t   pollVal2    = SMoCommand::gBody[9];
+    const uint8_t * data        = &SMoCommand::gBody[10];
 
     uint8_t pollVal = flash ? pollVal1 : pollVal2;
     if (SMoGeneral::gAddress.d.extH & 0x80)
@@ -360,9 +360,9 @@ TIMEOUT_ProgramMemory:
 static void
 ReadMemory(bool flash)
 {
-    uint16_t  numBytes    =  SMoCommand::gBody[1] << 8 | SMoCommand::gBody[2];
-    const uint8_t   cmd   =   SMoCommand::gBody[3];
-    uint8_t *outData      =  &SMoCommand::gBody[2];
+    uint16_t  numBytes    = SMoCommand::gBody[1] << 8 | SMoCommand::gBody[2];
+    const uint8_t   cmd   = SMoCommand::gBody[3];
+    uint8_t *outData      = &SMoCommand::gBody[2];
 
     if (SMoGeneral::gAddress.d.extH & 0x80)
         SPITransaction(0x4D, 0, SMoGeneral::gAddress.d.extL, 0); // Load Extended Address byte

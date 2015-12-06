@@ -283,10 +283,10 @@ SMoHVSP::ChipErase()
 static void
 ProgramMemory(bool flash)
 {
-    uint16_t        numBytes    =  SMoCommand::gBody[1] << 8 | SMoCommand::gBody[2];
-    const uint8_t   mode        =   SMoCommand::gBody[3];
-    const uint8_t   pollTimeout =   SMoCommand::gBody[4];
-    const uint8_t * data        =  &SMoCommand::gBody[5];
+    uint16_t        numBytes    = SMoCommand::gBody[1] << 8 | SMoCommand::gBody[2];
+    const uint8_t   mode        = SMoCommand::gBody[3];
+    const uint8_t   pollTimeout = SMoCommand::gBody[4];
+    const uint8_t * data        = &SMoCommand::gBody[5];
 
     uint16_t pageMask = (1 << ((mode & 0x0E ? mode & 0x0E : 0x10) >> 1) - (flash ? 1 : 0)) - 1;
     int8_t b;
@@ -334,8 +334,8 @@ TIMEOUT_ProgramMemory:
 static void
 ReadMemory(bool flash)
 {
-    uint16_t    numBytes    =  SMoCommand::gBody[1] << 8 | SMoCommand::gBody[2];
-    uint8_t *   dataOut     =  &SMoCommand::gBody[2];
+    uint16_t    numBytes    = SMoCommand::gBody[1] << 8 | SMoCommand::gBody[2];
+    uint8_t *   dataOut     = &SMoCommand::gBody[2];
     
     int8_t b;
     HVSPTransfer(HVSPControlPattern(sLoadCommand, sLowByte), flash ? SMoGeneral::gControlStack[sReadFlash] : SMoGeneral::gControlStack[sReadEEPROM]);
