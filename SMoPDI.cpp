@@ -120,99 +120,43 @@
 //
 // Pin definitions
 //
-// PDI has a functionality so called "Drive Contention and Collision Detection," and the target chip
-// very really easily regards there is a collision on the data line. To avoid this, simple 
-// impedance-matching mixture of MISO and MOSI doesn't always work, and thus an external tri-state
-// buffer might be required: We must explicitly switch the direction of PDI_DATA line using it.
-//
-// Here we assume the tri-state buffer is 74HC125 or similar and its gate is connected to PDI_DATA_GATE pin.
 
 #if SMO_LAYOUT==SMO_LAYOUT_STANDARD
-// use SS pin to open/close gate of the tri-state buffer 74HC125
 inline void
 MOSI_ACTIVE(void)
 {
-    PORTB &= ~_BV(2); // PB2 = SS;
+    DDRB |= _BV(3); // PB3 = MOSI;
 }
 
 inline void
 MOSI_TRISTATE(void)
 {
-    PORTB |= _BV(2); // PB2 = SS;
+    DDRB &= ~_BV(3); // PB3 = MOSI;
 }
-
-inline void
-MOSI_GATE_INIT(void)
-{
-    PORTB |= _BV(2); // gate closed
-    DDRB |= _BV(2); // PB2 = SS;
-}
-
-#elif SMO_LAYOUT==SMO_LAYOUT_LEONARDO
-// use D10 pin to open/close gate of the tri-state buffer 74HC125
+#elif SMO_LAYOUT==SMO_LAYOUT_LEONARDO || SMO_LAYOUT==SMO_LAYOUT_MEGA
 inline void
 MOSI_ACTIVE(void)
 {
-    PORTB &= ~_BV(6); // PB6 = D10;
+    DDRB |= _BV(2); // PB2 = MOSI;
 }
 
 inline void
 MOSI_TRISTATE(void)
 {
-    PORTB |= _BV(6); // PB6 = D10;
+    DDRB &= ~_BV(2); // PB2 = MOSI;
 }
-
-inline void
-MOSI_GATE_INIT(void)
-{
-    PORTB |= _BV(6); // gate closed
-    DDRB |= _BV(6); // PB6 = D10;
-}
-
-#elif SMO_LAYOUT==SMO_LAYOUT_MEGA
-// use SS pin to open/close gate of the tri-state buffer 74HC125
-inline void
-MOSI_ACTIVE(void)
-{
-    PORTB &= ~_BV(0); // PB0 = SS;
-}
-
-inline void
-MOSI_TRISTATE(void)
-{
-    PORTB |= _BV(0); // PB0 = SS;
-}
-
-inline void
-MOSI_GATE_INIT(void)
-{
-    PORTB |= _BV(0); // gate closed
-    DDRB |= _BV(0); // PB0 = SS;
-}
-
 #elif SMO_LAYOUT==SMO_LAYOUT_HVPROG2
-// use PROGRST pin to open/close gate of the tri-state buffer 74HC125
 inline void
 MOSI_ACTIVE(void)
 {
-    PORTD |= _BV(2);
+    DDRB |= _BV(5); // PB5 = MOSI;
 }
 
 inline void
 MOSI_TRISTATE(void)
 {
-    PORTD &= ~_BV(2);
-    // since PROGRST is pulled-up by external resistor, it is very slow in transition LOW -> HIGH
-    delayMicroseconds(5);
+    DDRB &= ~_BV(5); // PB5 = MOSI;
 }
-
-inline void
-MOSI_GATE_INIT(void)
-{
-    PORTD &= ~_BV(2); // MOSI tristate  
-    DDRD |= _BV(2);
-}
-
 #endif
 
 #if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
@@ -274,8 +218,10 @@ HeartBeatOff(void)
 static void
 EnableHeartBeat(void)
 {
-    delayMicroseconds(90); // set PDI_DATA high for < 100us to disable RESET function on PDI_CLK
-    SPI.transfer(0xFF);
+    // set PDI_DATA high for < 100us to disable RESET function on PDI_CLK
+    // Note: Since RESET line in a circuit might have capacitance longer delay is better 
+    delayMicroseconds(90);
+    SPI.transfer(0xFF); // send 16 clock pulses to PDI_CLK
     SPI.transfer(0xFF);
 
     // to keep the established PDI connection active we must send dummy pulse periodically
@@ -379,7 +325,7 @@ PDILoad(uint8_t c, uint8_t *p, uint8_t n)
         while (data.c[1] == 0xFF) // wait for the start bit
             data.c[1] = SPI.transfer(0xFF);
         b = 0;
-        data.c[0] = 0xFF;
+        data.c[0] = 0xFF; // sentinel
         data.c[2] = SPI.transfer(0xFF);
         // now the received 8 bit data is contained in data.l
         while (data.c[1] != 0x7F) {
@@ -435,19 +381,15 @@ PDISendKey(void)
 static void
 PDIEnableTarget(void)
 {
-#if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
-    // make sure that 12V regulator is shutdown 
-    digitalWrite(SMO_HVENABLE, LOW);
-    pinMode(SMO_HVENABLE, OUTPUT);
-#endif
-    MOSI_GATE_INIT(); // MOSI tristate
-    digitalWrite(MOSI, HIGH); // to keep MOSI HIGH during the period from HeartBeatOn() to HeartBeatOff()
-    pinMode(MOSI, OUTPUT);
-    SPDR = 0xFF; // to keep MOSI HIGH before the first data is shifted out from SPI
+    digitalWrite(MOSI, HIGH); // to keep MOSI HIGH from HeartBeatOn() to HeartBeatOff()
+    pinMode(MOSI, OUTPUT);    // specify the data direction of MOSI and SCK to become SPI master
+    pinMode(SCK, OUTPUT);
+    SPDR = 0xFF;              // to keep MOSI HIGH before the first data (dummy clocks) is shifted out
     SPI.begin();
     SPI.beginTransaction(SPISettings(20000000, LSBFIRST, SPI_MODE3));
-    delay(100); // set PDI_DATA low for a while
-    MOSI_ACTIVE(); // Gate open
+    MOSI_TRISTATE();
+    delay(100);               // set PDI_DATA low for a while
+    MOSI_ACTIVE();
     EnableHeartBeat();
 }
 
@@ -455,7 +397,6 @@ static void
 PDIDisableTarget(void)
 {
     DisableHeartBeat();
-
     SPI.endTransaction();
     SPI.end();
 }
@@ -497,7 +438,7 @@ SMoPDI::EnterProgmode()
     
     PDIEnableTarget();
     /* Direction change guard time to 2 CLK bits */
-    PDIStore(PDI_CMD_STCS | REG_CTRL, _BV(GT2) | _BV(GT1));
+    PDIStore(PDI_CMD_STCS | REG_CTRL, _BV(GT2) | _BV(GT1) | _BV(GT0));
     PDIStore(PDI_CMD_STCS | REG_RESET, 0x59); // reset key
     PDISendKey();
     if (!WaitUntilNVMActive())
@@ -518,11 +459,6 @@ SMoPDI::LeaveProgmode()
     PDIDisableTarget();
     XPRG_Body[1] = XPRG_ERR_OK;
     return 2;    
-
-LeaveProgmodeERROR:
-    PDIDisableTarget();
-    XPRG_Body[1] = XPRG_ERR_TIMEOUT;
-    return 2;
 }
 
 uint16_t
@@ -585,7 +521,7 @@ SMoPDI::Erase()
     return 2;
 }
 
-/* There are many many typos in Atmel's application note AVR079, dated back to Apr. 2008. 
+/* There are many typos in Atmel's application note AVR079, dated back to Apr. 2008. 
 The following should be the correct statements written there about XPRG_WRITE_MEM:
 ----------------------------------------------------------------------------------------------------------
 9.2.5 XPRG_WRITE_MEM 

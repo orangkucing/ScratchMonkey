@@ -78,13 +78,54 @@ enum {
 
 static int8_t sPageMask;
 
+// TPI doesn't require MOSI to be tri-state when receiving data from the target
+// (provided that MOSI is kept HIGH and connected to PDI_DATA through a resistor of ~ 1 kilo ohm)
+// but we'd better to do so.
+#if SMO_LAYOUT==SMO_LAYOUT_STANDARD
+inline void
+MOSI_ACTIVE(void)
+{
+    DDRB |= _BV(3); // PB3 = MOSI;
+}
+
+inline void
+MOSI_TRISTATE(void)
+{
+    DDRB &= ~_BV(3); // PB3 = MOSI;
+}
+#elif SMO_LAYOUT==SMO_LAYOUT_LEONARDO || SMO_LAYOUT==SMO_LAYOUT_MEGA
+inline void
+MOSI_ACTIVE(void)
+{
+    DDRB |= _BV(2); // PB2 = MOSI;
+}
+
+inline void
+MOSI_TRISTATE(void)
+{
+    DDRB &= ~_BV(2); // PB2 = MOSI;
+}
+#elif SMO_LAYOUT==SMO_LAYOUT_HVPROG2
+inline void
+MOSI_ACTIVE(void)
+{
+    DDRB |= _BV(5); // PB5 = MOSI;
+}
+
+inline void
+MOSI_TRISTATE(void)
+{
+    DDRB &= ~_BV(5); // PB5 = MOSI;
+}
+#endif
+
 /*
 * send two byte in two TPI frame (24 bits)
 * (1 start + 8 data + 1 parity + 2 stop) * 2
 * using 3 SPI data bytes (3 x 8 = 24 clocks)
 */
 static void
-TPITransfer(uint8_t c, uint8_t d)
+TPIStore(uint8_t c, uint8_t d)
 {
     union {
       uint32_t l;
@@ -107,7 +148,7 @@ TPITransfer(uint8_t c, uint8_t d)
 * using 2 SPI data bytes (2 x 8 = 16 clocks)
 */
 static void
-_TPITransfer(uint8_t c)
+TPITransfer(uint8_t c)
 {
     union {
       uint16_t i;
@@ -126,37 +167,38 @@ _TPITransfer(uint8_t c)
 * via SPI 3 bytes (24 clocks)
 */
 static void
-TPITransfer(uint8_t c, uint8_t *p)
+TPILoad(uint8_t c, uint8_t *p)
 {
     union {
-      uint16_t i;
-      uint8_t c[2];
+      uint32_t l;
+      uint8_t c[4];
     } data;
 
-    _TPITransfer(c);
+    TPITransfer(c);
+    MOSI_TRISTATE();
     do { // wait for the start bit
-        data.c[0] = SPI.transfer(0xFF);
-    } while (data.c[0] == 0xFF);
-    data.c[1] = SPI.transfer(0xFF);
-    // now the received 8 bit data is contained in data.c[1:0]
-    // Note: If the position of the start bit is within bit [7:5] of data.c[0]
+        data.c[1] = SPI.transfer(0xFF);
+    } while (data.c[1] == 0xFF);
+    data.c[0] = 0xFF; // sentinel
+    data.c[2] = SPI.transfer(0xFF);
+    // now the received 8 bit data is contained in data.c[2:1]
+    // Note: If the position of the start bit is within bit [7:5] of data.c[1]
     // then 1 - 3 bits of the parity bit and/or stop bits are not received, yet.
     SPI.transfer(0xFF); // receive remaining bits if any
-    while (data.c[0] != 0x7F) {
-        data.i <<= 1;
-        data.c[0] |= 1;
-    }
-    *p = data.c[1];
+    while (data.c[1] != 0x7F)
+        data.l <<= 1;
+    *p = data.c[2];
+    MOSI_ACTIVE();
 }
 
 static void
 TPISendKey(void)
 {
-    _TPITransfer(TPI_CMD_SKEY);
-    TPITransfer((uint8_t)0xFF, (uint8_t)0x88); // keys
-    TPITransfer((uint8_t)0xD8, (uint8_t)0xCD);
-    TPITransfer((uint8_t)0x45, (uint8_t)0xAB);
-    TPITransfer((uint8_t)0x89, (uint8_t)0x12);
+    TPITransfer(TPI_CMD_SKEY);
+    TPIStore(0xFF, 0x88); // keys
+    TPIStore(0xD8, 0xCD);
+    TPIStore(0x45, 0xAB);
+    TPIStore(0x89, 0x12);
 }
 
 static void
@@ -208,9 +250,8 @@ TPIEnableTarget(void)
     digitalWrite(TPI_RESET, HIGH); // rising edge of the positive pulse
     
     // set control pins
-    // to avoid glitch in SCK and MOSI we must set CPOL before SPI.begin()
-    SPCR |= _BV(CPOL) | _BV(CPHA); // idle HIGH for SPI_MODE3
-    //
+    pinMode(MOSI, OUTPUT);    // specify the data direction of MOSI and SCK to become SPI master
+    pinMode(SCK, OUTPUT);
     SPI.begin();
     SPI.beginTransaction(SPISettings(2000000, LSBFIRST, SPI_MODE3)); // max clock freq for programming is 2MHz
 
@@ -239,7 +280,7 @@ WaitWhileNVMControllerBusy(void)
     uint8_t s;
     uint32_t time = millis();
     do {
-        TPITransfer(TPI_CMD_SIN(SMoXPROG::XPRGParam.NVMCSR), &s);
+        TPILoad(TPI_CMD_SIN(SMoXPROG::XPRGParam.NVMCSR), &s);
         if (millis() - time > DEFAULTTIMEOUT)
             return false;
     } while (s & _BV(NVMBSY));
@@ -255,7 +296,7 @@ SMoTPI::EnterProgmode()
     TPIEnableTarget();
 
     /* Direction change guard time to 0 CLK bits */
-    TPITransfer(TPI_CMD_SSTCS | REG_TPIPCR, (uint8_t)(GT2 | GT1 | GT0));
+    TPIStore(TPI_CMD_SSTCS | REG_TPIPCR, GT2 | GT1 | GT0);
 
     /* Enable access to the XPROG NVM bus by sending the documented NVM access key to the device */
     TPISendKey();
@@ -264,17 +305,17 @@ SMoTPI::EnterProgmode()
     uint8_t s;
     do {
         /* Send the SLDCS command to read the TPI STATUS register to see the NVM bus is active */
-        TPITransfer(TPI_CMD_SLDCS | REG_TPISR, &s);
+        TPILoad(TPI_CMD_SLDCS | REG_TPISR, &s);
     } while (!(s & _BV(NVMEN)));
 
  //-----------------------------------------------------------------------------------------------   
     /* determine write size */
-    TPITransfer(TPI_CMD_SOUT(SMoXPROG::XPRGParam.NVMCMD), (uint8_t)NO_OPERATION);
-    TPITransfer(TPI_CMD_SSTPR | 0, 0xC1); // location of the second byte of signature
-    TPITransfer(TPI_CMD_SSTPR | 1, 0x3F);
+    TPIStore(TPI_CMD_SOUT(SMoXPROG::XPRGParam.NVMCMD), NO_OPERATION);
+    TPIStore(TPI_CMD_SSTPR | 0, 0xC1); // location of the second byte of signature
+    TPIStore(TPI_CMD_SSTPR | 1, 0x3F);
 
     uint8_t c;
-    TPITransfer(TPI_CMD_SLD | POINTER_UNCHANGED, (uint8_t *)&c);
+    TPILoad(TPI_CMD_SLD | POINTER_UNCHANGED, &c);
     if (c < 0x90) // 512B Flash memory
         sPageMask = 1; // 2 bytes at a time
     else // 2^(c & 0x0F) KB Flash memory
@@ -287,12 +328,7 @@ SMoTPI::EnterProgmode()
 uint16_t
 SMoTPI::LeaveProgmode()
 {
-    uint8_t s;
-    do {
-        TPITransfer(TPI_CMD_SSTCS | REG_TPISR, (uint8_t)0x00);
-        TPITransfer(TPI_CMD_SLDCS | REG_TPISR, &s);
-    } while (s);
-
+    TPIStore(TPI_CMD_SSTCS | REG_TPISR, 0x00);
     TPIDisableTarget();
     XPRG_Body[1] = XPRG_ERR_OK;
     return 2;
@@ -307,11 +343,11 @@ SMoTPI::Erase()
     //SMoGeneral::gAddress.c[1] = XPRG_Body[4];
     //SMoGeneral::gAddress.c[0] = XPRG_Body[5];
   
-    TPITransfer(TPI_CMD_SOUT(SMoXPROG::XPRGParam.NVMCMD), mode == XPRG_ERASE_CHIP ? (uint8_t)CHIP_ERASE : (uint8_t)SECTION_ERASE);
+    TPIStore(TPI_CMD_SOUT(SMoXPROG::XPRGParam.NVMCMD), mode == XPRG_ERASE_CHIP ? CHIP_ERASE : SECTION_ERASE);
 
-    TPITransfer(TPI_CMD_SSTPR | 0, XPRG_Body[5] | 1);
-    TPITransfer(TPI_CMD_SSTPR | 1, XPRG_Body[4]);
-    TPITransfer(TPI_CMD_SST | POINTER_UNCHANGED, (uint8_t)0x55); // dummy write
+    TPIStore(TPI_CMD_SSTPR | 0, XPRG_Body[5] | 1);
+    TPIStore(TPI_CMD_SSTPR | 1, XPRG_Body[4]);
+    TPIStore(TPI_CMD_SST | POINTER_UNCHANGED, 0x55); // dummy write
 
     XPRG_Body[1] = WaitWhileNVMControllerBusy() ? XPRG_ERR_OK : XPRG_ERR_TIMEOUT;
     return 2;
@@ -331,27 +367,27 @@ SMoTPI::WriteMem()
 
     int8_t writeSize = memcode == XPRG_MEM_TYPE_LOCKBITS ? 1 : sPageMask;
 
-    TPITransfer(TPI_CMD_SOUT(SMoXPROG::XPRGParam.NVMCMD), (uint8_t)WORD_WRITE);
+    TPIStore(TPI_CMD_SOUT(SMoXPROG::XPRGParam.NVMCMD), WORD_WRITE);
     if (numBytes & 1)
         data[numBytes++] = 0xFF; // padding
 
     /* Send the address of the location to write to */
-    TPITransfer(TPI_CMD_SSTPR | 0, XPRG_Body[6]);
-    TPITransfer(TPI_CMD_SSTPR | 1, XPRG_Body[5]);
+    TPIStore(TPI_CMD_SSTPR | 0, XPRG_Body[6]);
+    TPIStore(TPI_CMD_SSTPR | 1, XPRG_Body[5]);
 
     uint16_t i = 0;
     do {
         do {
-            TPITransfer(TPI_CMD_SST | POINTER_POST_INC, *data++);
+            TPIStore(TPI_CMD_SST | POINTER_POST_INC, *data++);
             i++;
-            TPITransfer(TPI_CMD_SST | POINTER_POST_INC, *data++);
+            TPIStore(TPI_CMD_SST | POINTER_POST_INC, *data++);
             i++;
             if (i == numBytes) {
                 while (i & sPageMask) { // write dummy bytes
                     TPISendIdle();
-                    TPITransfer(TPI_CMD_SST | POINTER_POST_INC, (uint8_t)0xFF);
+                    TPIStore(TPI_CMD_SST | POINTER_POST_INC, 0xFF);
                     i++;
-                    TPITransfer(TPI_CMD_SST | POINTER_POST_INC, (uint8_t)0xFF);
+                    TPIStore(TPI_CMD_SST | POINTER_POST_INC, 0xFF);
                     i++;
                 }
                 break;
@@ -382,14 +418,14 @@ SMoTPI::ReadMem()
     uint8_t *outData = &XPRG_Body[2];
     
     /* Set the NVM control register to the NO OP command for memory reading */
-    TPITransfer(TPI_CMD_SOUT(SMoXPROG::XPRGParam.NVMCMD), (uint8_t)NO_OPERATION);
+    TPIStore(TPI_CMD_SOUT(SMoXPROG::XPRGParam.NVMCMD), NO_OPERATION);
 
     /* Send the address of the location to read from */
-    TPITransfer(TPI_CMD_SSTPR | 0, XPRG_Body[5]);
-    TPITransfer(TPI_CMD_SSTPR | 1, XPRG_Body[4]);
+    TPIStore(TPI_CMD_SSTPR | 0, XPRG_Body[5]);
+    TPIStore(TPI_CMD_SSTPR | 1, XPRG_Body[4]);
 
     for (uint16_t i = 0; i < numBytes; i++) {
-        TPITransfer(TPI_CMD_SLD | POINTER_POST_INC, outData++);
+        TPILoad(TPI_CMD_SLD | POINTER_POST_INC, outData++);
     }
     XPRG_Body[1] = XPRG_ERR_OK;
     return numBytes + 2;
