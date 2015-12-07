@@ -144,7 +144,7 @@ TPIStore(uint8_t c, uint8_t d)
 
 /*
 * send one byte in one TPI frame (12 bits)
-* 2 idle + 1 start + 8 data + 1 parity + 2 stop + 2 idle
+* 4 idle + 1 start + 8 data + 1 parity + 2 stop
 * using 2 SPI data bytes (2 x 8 = 16 clocks)
 */
 static void
@@ -157,8 +157,8 @@ TPITransfer(uint8_t c)
     
     data.i = 0U;
     data.c[0] = c;
-    data.i <<= 3;
-    data.i |= parity_even_bit(c) << 11 | 0xF003;
+    data.i <<= 5;
+    data.i |= parity_even_bit(c) << 13 | 0xC00F;
     SPI.transfer((uint8_t*)&data.c[0], 2);
 }
 

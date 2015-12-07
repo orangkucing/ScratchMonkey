@@ -284,6 +284,31 @@ DisableHeartBeat(void)
 }
 
 /*
+* send two byte in two PDI frame (24 bits)
+* (1 start + 8 data + 1 parity + 2 stop) * 2
+* using 3 SPI data bytes (3 x 8 = 24 clocks)
+*/
+static void
+PDIStore(uint8_t c, uint8_t d)
+{
+    union {
+      uint32_t l;
+      uint8_t c[4];
+    } data;
+
+    data.l = 0UL;
+    data.c[1] = d;
+    data.l <<= 4;
+    data.c[0] = c;
+    data.l <<= 1;
+    data.c[1] |= parity_even_bit(c) << 1 | 0x0C;
+    data.c[2] |= parity_even_bit(d) << 5 | 0xC0;
+    HeartBeatOff();
+    SPI.transfer((uint8_t*)&data.c[0], 3);
+    HeartBeatOn();
+}
+
+/*
 * send one byte in one PDI frame (12 bits)
 * 4 idle + 1 start + 8 data + 1 parity + 2 stop
 * using 2 SPI data bytes (2 x 8 = 16 clocks)
@@ -343,13 +368,6 @@ PDILoad(uint8_t c, uint8_t *p, uint8_t n)
     } while (n--);
     MOSI_ACTIVE();
     HeartBeatOn();
-}
-
-static void
-PDIStore(uint8_t d, uint8_t e)
-{
-    PDITransfer(d);
-    PDITransfer(e);
 }
 
 static void
