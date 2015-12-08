@@ -189,10 +189,10 @@ HeartBeatOn(void)
 #if defined(TCCR2)
     TCCR2  = _BV(WGM21) | _BV(CS21);
 #else
-    TCCR2B = _BV(CS21);
+    TCCR2B = _BV(WGM22) | _BV(CS21);
 #endif
 #else
-    TCCR1B = _BV(CS11);
+    TCCR1B = _BV(WGM12) | _BV(CS11);
 #endif
    SPCR &= ~_BV(SPE);         // temporary disable SPI
    interrupts();
@@ -237,27 +237,27 @@ EnableHeartBeat(void)
 #endif
 #if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
 #if defined(TCCR2)
-    TCCR2  = _BV(WGM21);               // Stop Timer 2
-    TCNT2  = 0xFF;                     // Initialize counter value
+    TCCR2  = 0;                        // Stop Timer 2
+    TCNT2  = 0;                        // Initialize counter value
     OCR2   = CMV;                      // Set compare match value
     // CTC mode. Set timer operation mode and prescaler 1/8
     TIMSK  |= _BV(OCIE2);              // TIMER2_COMP interrupt enabled
     TCCR2  = _BV(WGM21) | _BV(CS21);
 #else
     TCCR2B = 0;                        // Stop Timer 2
-    TCCR2A = _BV(WGM21);               // CTC mode
-    TCNT2  = 0xFF;                     // Initialize counter value
+    TCCR2A = 0;                        // CTC mode
+    TCNT2  = 0;                        // Initialize counter value
     OCR2A  = CMV;                      // Set compare match value
     TIMSK2 |= _BV(OCIE2A);             // TIMER2_COMPA interrupt enabled
-    TCCR2B = _BV(CS21);                // Set timer operation mode and prescaler 1/8
+    TCCR2B = _BV(WGM22) | _BV(CS21);   // Set timer operation mode and prescaler 1/8
 #endif
 #else
     TCCR1B = 0;                        // Stop clock generator
-    TCCR1A = _BV(WGM12);               // CTC mode
-    TCNT1  = 0xFF;                     // Initialize counter value
+    TCCR1A = 0;                        // CTC mode
+    TCNT1  = 0;                        // Initialize counter value
     OCR1A  = CMV;                      // Set compare match value
     TIMSK1 |= _BV(OCIE1A);             // TIMER1_COMPA interrupt enabled
-    TCCR1B = _BV(CS11);                // Set timer operation mode and Prescaler 1/8
+    TCCR1B = _BV(WGM12) | _BV(CS11);   // Set timer operation mode and Prescaler 1/8
 #endif
     interrupts();
 }
