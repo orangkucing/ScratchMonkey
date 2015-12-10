@@ -220,7 +220,7 @@ EnableHeartBeat(void)
 {
     // set PDI_DATA high for < 100us to disable RESET function on PDI_CLK
     // Note: Since RESET line in a circuit might have capacitance longer delay is better 
-    delayMicroseconds(90);
+    delayMicroseconds(58);
     SPI.transfer(0xFF); // send 16 clock pulses to PDI_CLK
     SPI.transfer(0xFF);
 
@@ -399,15 +399,16 @@ PDISendKey(void)
 static void
 PDIEnableTarget(void)
 {
-    digitalWrite(MOSI, HIGH); // to keep MOSI HIGH from HeartBeatOn() to HeartBeatOff()
+    pinMode(MISO, INPUT);
+    digitalWrite(MOSI, LOW);
     pinMode(MOSI, OUTPUT);    // specify the data direction of MOSI and SCK to become SPI master
+    pinMode(SCK, LOW);
     pinMode(SCK, OUTPUT);
+    delay(100);               // set PDI_DATA low for a while
+    digitalWrite(MOSI, HIGH); // to keep MOSI HIGH from HeartBeatOn() to HeartBeatOff()    
     SPDR = 0xFF;              // to keep MOSI HIGH before the first data (dummy clocks) is shifted out
     SPI.begin();
     SPI.beginTransaction(SPISettings(20000000, LSBFIRST, SPI_MODE3));
-    MOSI_TRISTATE();
-    delay(100);               // set PDI_DATA low for a while
-    MOSI_ACTIVE();
     EnableHeartBeat();
 }
 
@@ -456,7 +457,7 @@ SMoPDI::EnterProgmode()
     
     PDIEnableTarget();
     /* Direction change guard time to 2 CLK bits */
-    PDIStore(PDI_CMD_STCS | REG_CTRL, _BV(GT2) | _BV(GT1) | _BV(GT0));
+    //PDIStore(PDI_CMD_STCS | REG_CTRL, _BV(GT2) | _BV(GT1) | _BV(GT0));
     PDIStore(PDI_CMD_STCS | REG_RESET, 0x59); // reset key
     PDISendKey();
     if (!WaitUntilNVMActive())
