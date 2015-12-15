@@ -461,7 +461,7 @@ SMoHVPP::EnterProgmode()
 void
 SMoHVPP::LeaveProgmode()
 {
-    //const uint8_t   stabDelay  = SMoCommand::gBody[1];
+    const uint8_t   stabDelay  = SMoCommand::gBody[1];
     const uint8_t   resetDelay = SMoCommand::gBody[2];
 
     digitalWrite(HVPP_VCC, LOW);
@@ -473,8 +473,8 @@ SMoHVPP::LeaveProgmode()
     digitalWrite(HVPP_VCC, HIGH);
     digitalWrite(HVPP_RESET, LOW);
 #endif
-    //delay(stabDelay);
     SMoCommand::SendResponse();
+    delay(stabDelay);
 }
 
 void
