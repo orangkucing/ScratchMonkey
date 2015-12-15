@@ -242,7 +242,7 @@ SMoHVSP::EnterProgmode()
 void
 SMoHVSP::LeaveProgmode()
 {
-    const uint8_t   stabDelay  = SMoCommand::gBody[1];
+    //const uint8_t   stabDelay  = SMoCommand::gBody[1];
     const uint8_t   resetDelay = SMoCommand::gBody[2];
 
     digitalWrite(HVSP_VCC, LOW);
@@ -255,7 +255,7 @@ SMoHVSP::LeaveProgmode()
     digitalWrite(HVSP_VCC, HIGH);
     digitalWrite(HVSP_RESET, LOW);
 #endif
-    delay(stabDelay);
+    //delay(stabDelay);
     SMoCommand::SendResponse();
 }
 
