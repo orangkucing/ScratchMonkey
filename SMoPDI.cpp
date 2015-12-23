@@ -125,37 +125,73 @@
 inline void
 MOSI_ACTIVE(void)
 {
+#if defined(MOSI_GATE)
+    // gate LOW
+    digitalWrite(MOSI_GATE, LOW);
+#else // direct connection
+    // MOSI line is set to OUTPUT
     DDRB |= _BV(3); // PB3 = MOSI;
+#endif
 }
 
 inline void
 MOSI_TRISTATE(void)
 {
+#if defined(MOSI_GATE)
+    // gate HIGH
+    digitalWrite(MOSI_GATE, HIGH);
+#else // direct connection
+    // MOSI line is set to INPUT
     DDRB &= ~_BV(3); // PB3 = MOSI;
+#endif
 }
 #elif SMO_LAYOUT==SMO_LAYOUT_LEONARDO || SMO_LAYOUT==SMO_LAYOUT_MEGA
 inline void
 MOSI_ACTIVE(void)
 {
+#if defined(MOSI_GATE)
+    // gate LOW
+    digitalWrite(MOSI_GATE, LOW);
+#else // direct connection
+    // MOSI line is set to OUTPUT
     DDRB |= _BV(2); // PB2 = MOSI;
+#endif
 }
 
 inline void
 MOSI_TRISTATE(void)
 {
+#if defined(MOSI_GATE)
+    // gate HIGH
+    digitalWrite(MOSI_GATE, HIGH);
+#else // direct connection
+    // MOSI line is set to INPUT
     DDRB &= ~_BV(2); // PB2 = MOSI;
+#endif
 }
 #elif SMO_LAYOUT==SMO_LAYOUT_HVPROG2
 inline void
 MOSI_ACTIVE(void)
 {
+#if defined(MOSI_GATE)
+    // gate LOW
+    digitalWrite(MOSI_GATE, LOW);
+#else // direct connection
+    // MOSI line is set to OUTPUT
     DDRB |= _BV(5); // PB5 = MOSI;
+#endif
 }
 
 inline void
 MOSI_TRISTATE(void)
 {
+#if defined(MOSI_GATE)
+    // gate HIGH
+    digitalWrite(MOSI_GATE, HIGH);
+#else // direct connection
+    // MOSI line set to INPUT
     DDRB &= ~_BV(5); // PB5 = MOSI;
+#endif
 }
 #endif
 
@@ -172,11 +208,14 @@ MOSI_TRISTATE(void)
 ISR(TIMER_COMP_vect)
 {
 #if SMO_LAYOUT==SMO_LAYOUT_STANDARD
-    PORTB ^= _BV(5);          // PB5 = SCK;
+    PORTB &= ~_BV(5);          // PB5 = SCK;
+    PORTB |= _BV(5);
 #elif SMO_LAYOUT==SMO_LAYOUT_LEONARDO || SMO_LAYOUT==SMO_LAYOUT_MEGA
-    PORTB ^= _BV(1);          // PB1 = SCK;
+    PORTB &= ~_BV(1);          // PB1 = SCK;
+    PORTB |= _BV(1);
 #elif SMO_LAYOUT==SMO_LAYOUT_HVPROG2
-    PORTB ^= _BV(7) ;         // PB7 = SCK;
+    PORTB &= ~_BV(7) ;         // PB7 = SCK;
+    PORTB |= _BV(7);
 #endif
 }
 
@@ -184,17 +223,20 @@ inline void
 HeartBeatOn(void)
 {
     noInterrupts();
+    SPCR &= ~_BV(SPE);         // temporary disable SPI
     // Set timer operation mode and prescaler 1/8
 #if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
 #if defined(TCCR2)
+    TCNT2  = 0;
     TCCR2  = _BV(WGM21) | _BV(CS21);
 #else
-    TCCR2B = _BV(WGM22) | _BV(CS21);
+    TCNT2  = 0;
+    TCCR2B = _BV(CS21);
 #endif
 #else
+    TCNT1  = 0;
     TCCR1B = _BV(WGM12) | _BV(CS11);
 #endif
-   SPCR &= ~_BV(SPE);         // temporary disable SPI
    interrupts();
 }
 
@@ -211,8 +253,8 @@ HeartBeatOff(void)
 #else
     TCCR1B = 0;
 #endif
-    SPCR |= _BV(SPE);         // enable SPI again
     interrupts();
+    SPCR |= _BV(SPE);         // enable SPI again
 }
 
 static void
@@ -220,7 +262,8 @@ EnableHeartBeat(void)
 {
     // set PDI_DATA high for < 100us to disable RESET function on PDI_CLK
     // Note: Since RESET line in a circuit might have capacitance longer delay is better 
-    delayMicroseconds(58);
+//    delayMicroseconds(58);
+delayMicroseconds(20);
     SPI.transfer(0xFF); // send 16 clock pulses to PDI_CLK
     SPI.transfer(0xFF);
 
@@ -245,11 +288,11 @@ EnableHeartBeat(void)
     TCCR2  = _BV(WGM21) | _BV(CS21);
 #else
     TCCR2B = 0;                        // Stop Timer 2
-    TCCR2A = 0;                        // CTC mode
+    TCCR2A = _BV(WGM21);               // CTC mode
     TCNT2  = 0;                        // Initialize counter value
     OCR2A  = CMV;                      // Set compare match value
     TIMSK2 |= _BV(OCIE2A);             // TIMER2_COMPA interrupt enabled
-    TCCR2B = _BV(WGM22) | _BV(CS21);   // Set timer operation mode and prescaler 1/8
+    TCCR2B = _BV(CS21);                // Set timer operation mode and prescaler 1/8
 #endif
 #else
     TCCR1B = 0;                        // Stop clock generator
@@ -345,7 +388,7 @@ PDILoad(uint8_t c, uint8_t *p, uint8_t n)
  
     PDITransfer(c, true);
     MOSI_TRISTATE();
-    data.c[1] = SPI.transfer(0xFF);
+    data.c[1] = SPI.transfer(0xFF) | B00000011; // the first 2 bits are garbage
     do {
         while (data.c[1] == 0xFF) // wait for the start bit
             data.c[1] = SPI.transfer(0xFF);
@@ -404,11 +447,15 @@ PDIEnableTarget(void)
     pinMode(MOSI, OUTPUT);    // specify the data direction of MOSI and SCK to become SPI master
     pinMode(SCK, LOW);
     pinMode(SCK, OUTPUT);
+#if defined(MOSI_GATE)
+    pinMode(MOSI_GATE, OUTPUT);
+#endif
+    MOSI_ACTIVE();
     delay(100);               // set PDI_DATA low for a while
     digitalWrite(MOSI, HIGH); // to keep MOSI HIGH from HeartBeatOn() to HeartBeatOff()    
     SPDR = 0xFF;              // to keep MOSI HIGH before the first data (dummy clocks) is shifted out
     SPI.begin();
-    SPI.beginTransaction(SPISettings(20000000, LSBFIRST, SPI_MODE3));
+    SPI.beginTransaction(SPISettings(2000000, LSBFIRST, SPI_MODE3));
     EnableHeartBeat();
 }
 

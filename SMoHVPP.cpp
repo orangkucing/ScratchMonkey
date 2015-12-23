@@ -414,8 +414,12 @@ SMoHVPP::EnterProgmode()
 
     delay(progModeDelay);
     // power off target
+#if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
+    analogWrite(HVPP_VCC, 0);
+#else
     digitalWrite(HVPP_VCC, LOW);
     pinMode(HVPP_VCC, OUTPUT);
+#endif
     delayMicroseconds(250);
     // target RESET = 0V
     digitalWrite(HVPP_RESET, HIGH);
@@ -442,7 +446,11 @@ SMoHVPP::EnterProgmode()
 #endif
     }
     // power on target
+#if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
+    analogWrite(HVPP_VCC, FIVEVOLT);
+#else
     digitalWrite(HVPP_VCC, HIGH);
+#endif
     delay(resetDelayMs);
     delayMicroseconds(resetDelayUs * 10 + 250); // add extra 250 microseconds
     // toggle XTAL1
@@ -461,20 +469,26 @@ SMoHVPP::EnterProgmode()
 void
 SMoHVPP::LeaveProgmode()
 {
+    // these values are in micro seconds not millisecconds as written in AVR068
+    // or Atmel Studio fails with timeout
     const uint8_t   stabDelay  = SMoCommand::gBody[1];
     const uint8_t   resetDelay = SMoCommand::gBody[2];
 
+#if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
+    analogWrite(HVPP_VCC, 0);
+#else
     digitalWrite(HVPP_VCC, LOW);
+#endif
     digitalWrite(HVPP_RESET, HIGH);
-    delay(resetDelay);
+    delayMicroseconds(resetDelay);
 
 #if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
     digitalWrite(SMO_HVENABLE, LOW); // disable 12V
-    digitalWrite(HVPP_VCC, HIGH);
+    analogWrite(HVPP_VCC, FIVEVOLT);
     digitalWrite(HVPP_RESET, LOW);
 #endif
+    delayMicroseconds(stabDelay);
     SMoCommand::SendResponse();
-    delay(stabDelay);
 }
 
 void

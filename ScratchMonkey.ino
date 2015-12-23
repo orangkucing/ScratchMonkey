@@ -42,8 +42,8 @@ setup()
 {
     Serial.begin(115200);
 #if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
-    digitalWrite(SMO_SVCC, HIGH);
-    pinMode(SMO_SVCC, OUTPUT);
+    analogWrite(SMO_SVCC, FIVEVOLT); // 5V
+    analogWrite(SMO_VADJ, THREEVOLT); // 3.3V for PDI programming (Atmel's original STK500 only)
     pinMode(SMO_GLED, OUTPUT); digitalWrite(SMO_GLED, LOW);
     pinMode(SMO_RLED, OUTPUT); digitalWrite(SMO_RLED, HIGH);
 #endif

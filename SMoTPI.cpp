@@ -78,47 +78,6 @@ enum {
 
 static int8_t sPageMask;
 
-// TPI doesn't require MOSI to be tri-state when receiving data from the target
-// (provided that MOSI is kept HIGH and connected to PDI_DATA through a resistor of ~ 1 kilo ohm)
-// but we'd better to do so.
-#if SMO_LAYOUT==SMO_LAYOUT_STANDARD
-inline void
-MOSI_ACTIVE(void)
-{
-    DDRB |= _BV(3); // PB3 = MOSI;
-}
-
-inline void
-MOSI_TRISTATE(void)
-{
-    DDRB &= ~_BV(3); // PB3 = MOSI;
-}
-#elif SMO_LAYOUT==SMO_LAYOUT_LEONARDO || SMO_LAYOUT==SMO_LAYOUT_MEGA
-inline void
-MOSI_ACTIVE(void)
-{
-    DDRB |= _BV(2); // PB2 = MOSI;
-}
-
-inline void
-MOSI_TRISTATE(void)
-{
-    DDRB &= ~_BV(2); // PB2 = MOSI;
-}
-#elif SMO_LAYOUT==SMO_LAYOUT_HVPROG2
-inline void
-MOSI_ACTIVE(void)
-{
-    DDRB |= _BV(5); // PB5 = MOSI;
-}
-
-inline void
-MOSI_TRISTATE(void)
-{
-    DDRB &= ~_BV(5); // PB5 = MOSI;
-}
-#endif
-
 /*
 * send two byte in two TPI frame (24 bits)
 * (1 start + 8 data + 1 parity + 2 stop) * 2
@@ -175,7 +134,6 @@ TPILoad(uint8_t c, uint8_t *p)
     } data;
 
     TPITransfer(c);
-    MOSI_TRISTATE();
     do { // wait for the start bit
         data.c[1] = SPI.transfer(0xFF);
     } while (data.c[1] == 0xFF);
@@ -188,7 +146,6 @@ TPILoad(uint8_t c, uint8_t *p)
     while (data.c[1] != 0x7F)
         data.l <<= 1;
     *p = data.c[2];
-    MOSI_ACTIVE();
 }
 
 static void

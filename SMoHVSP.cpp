@@ -176,8 +176,12 @@ SMoHVSP::EnterProgmode()
 
     delay(progModeDelay);
     // power off target
+#if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
+    analogWrite(HVSP_VCC, 0);
+#else
     digitalWrite(HVSP_VCC, LOW);    
     pinMode(HVSP_VCC, OUTPUT);
+#endif
     delayMicroseconds(250);
     // target RESET = 0V
     digitalWrite(HVSP_RESET, HIGH);
@@ -224,7 +228,11 @@ SMoHVSP::EnterProgmode()
 #endif
     }
     // power on target
+#if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
+    analogWrite(HVSP_VCC, FIVEVOLT);
+#else
     digitalWrite(HVSP_VCC, HIGH);
+#endif
     delay(resetDelayMs);
     delayMicroseconds(resetDelayUs * 10 + 250); // add extra 250 microseconds
     // toggle SCI
@@ -242,21 +250,27 @@ SMoHVSP::EnterProgmode()
 void
 SMoHVSP::LeaveProgmode()
 {
+    // these values are in micro seconds not millisecconds as written in AVR068
+    // or Atmel Studio fails with timeout
     const uint8_t   stabDelay  = SMoCommand::gBody[1];
     const uint8_t   resetDelay = SMoCommand::gBody[2];
 
+#if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
+    analogWrite(HVSP_VCC, 0);
+#else
     digitalWrite(HVSP_VCC, LOW);
+#endif
     digitalWrite(HVSP_RESET, HIGH);
 
-    delay(resetDelay);
+    delayMicroseconds(resetDelay);
     
 #if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
     digitalWrite(SMO_HVENABLE, LOW); // disable 12V
-    digitalWrite(HVSP_VCC, HIGH);
+    analogWrite(HVSP_VCC, FIVEVOLT);
     digitalWrite(HVSP_RESET, LOW);
 #endif
+    delayMicroseconds(stabDelay);
     SMoCommand::SendResponse();
-    delay(stabDelay);
 }
 
 void
