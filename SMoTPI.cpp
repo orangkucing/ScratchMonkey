@@ -172,8 +172,12 @@ TPIEnableTarget(void)
     // enter TPI programming mode
     
     // power off target (optional)
+#ifdef SMO_AVCC
+    analogWrite(TPI_VCC, 0);
+#else
     digitalWrite(TPI_VCC, LOW);
     pinMode(TPI_VCC, OUTPUT);
+#endif
     delayMicroseconds(250);
     // and target RESET = LOW, HVRESET=0V
     digitalWrite(TPI_RESET, LOW);
@@ -187,9 +191,9 @@ TPIEnableTarget(void)
 
     // make sure power is off completely
     {
-#if defined(SMO_AVCC)
+#ifdef SMO_AVCC
         uint32_t time = millis();
-        while (analogRead(SMO_AVCC) > 50) {   // wait until HVPP_VCC become lower than 0.3V
+        while (analogRead(SMO_AVCC) > 10) {   // wait until TPI_VCC becomes lower than 0.06V
             if (millis() - time > DEFAULTTIMEOUT)  // timeout
                 break;
         }
@@ -199,8 +203,19 @@ TPIEnableTarget(void)
     }
     
     // power on target
-    digitalWrite(TPI_VCC, HIGH);
-    delayMicroseconds(250);
+    {
+#ifdef SMO_AVCC
+        uint32_t time = millis();
+        analogWrite(TPI_VCC, 255);
+        while (analogRead(SMO_AVCC) < 600) {    // wait until TPI_VCC becomes higher than 3.6V
+            if (millis() - time > DEFAULTTIMEOUT) // timeout
+                break;
+        }
+        analogWrite(TPI_VCC, FIVEVOLT);
+#else
+        digitalWrite(TPI_VCC, HIGH);
+#endif
+    }
     // target RESET = minimum 400ns positive pulse
     // target HVRESET = 12V
     digitalWrite(TPI_HVRESET, LOW);

@@ -120,78 +120,80 @@
 //
 // Pin definitions
 //
+// A 5V-logic Arduino needs a 5V-tolerant 3-state bus buffer 74LVxxx125 as a level shifter to do PDI programming where the target voltage must be 3.3V.
+// For this purpose no automatic level shifter is known to work stably, i.e., none of MAX3002, GTL2003, TXB0104, or FXMA108 works reliably.
+//
+// Note:
+//     If you still want to use an automatic level shifter then adding 100 kilo ohm resistor between PDI_DATA and GND may sometimes solve the problem:
+//            http://blog.frankvh.com/2009/09/22/avr-xmega-and-avrisp-mk2/
+//            http://www.avrfreaks.net/forum/intermittant-programming-xplained-board-avrisp2?name=PNphpBB2&file=viewtopic&t=107517
+//     Or adding about 100 pico farad capacitor there may also help
+//            http://rabbit-note.com/2015/06/21/akiduki-i2c-level-converter-tips/ (in Japanese)
+#if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
+#define MOSI_GATE                  SMO_HVRESET // Gate of the 3-state buffer
+#else
+#define MOSI_GATE                  8           // Gate of the 3-state buffer
+#endif
 
 #if SMO_LAYOUT==SMO_LAYOUT_STANDARD
 inline void
 MOSI_ACTIVE(void)
 {
-#if defined(MOSI_GATE)
     // gate LOW
     digitalWrite(MOSI_GATE, LOW);
-#else // direct connection
+    // if direct connection w/o gate, i.e., 3V-tized Uno or 3.3V Pro Mini
     // MOSI line is set to OUTPUT
     DDRB |= _BV(3); // PB3 = MOSI;
-#endif
 }
 
 inline void
 MOSI_TRISTATE(void)
 {
-#if defined(MOSI_GATE)
     // gate HIGH
     digitalWrite(MOSI_GATE, HIGH);
-#else // direct connection
+    // if direct connection w/o gate, i.e., 3V-tized Uno or 3.3V Pro Mini
     // MOSI line is set to INPUT
     DDRB &= ~_BV(3); // PB3 = MOSI;
-#endif
 }
 #elif SMO_LAYOUT==SMO_LAYOUT_LEONARDO || SMO_LAYOUT==SMO_LAYOUT_MEGA
 inline void
 MOSI_ACTIVE(void)
 {
-#if defined(MOSI_GATE)
     // gate LOW
     digitalWrite(MOSI_GATE, LOW);
-#else // direct connection
+    // if direct connection w/o gate, i.e., 3V-tized Leonardo or Mega
     // MOSI line is set to OUTPUT
     DDRB |= _BV(2); // PB2 = MOSI;
-#endif
 }
 
 inline void
 MOSI_TRISTATE(void)
 {
-#if defined(MOSI_GATE)
     // gate HIGH
     digitalWrite(MOSI_GATE, HIGH);
-#else // direct connection
+    // if direct connection w/o gate, i.e., 3V-tized Leonardo or Mega
     // MOSI line is set to INPUT
     DDRB &= ~_BV(2); // PB2 = MOSI;
-#endif
 }
 #elif SMO_LAYOUT==SMO_LAYOUT_HVPROG2
 inline void
 MOSI_ACTIVE(void)
 {
-#if defined(MOSI_GATE)
     // gate LOW
-    digitalWrite(MOSI_GATE, LOW);
-#else // direct connection
+    digitalWrite(MOSI_GATE, HIGH);
+    // if direct connection w/o gate
     // MOSI line is set to OUTPUT
     DDRB |= _BV(5); // PB5 = MOSI;
-#endif
 }
 
 inline void
 MOSI_TRISTATE(void)
 {
-#if defined(MOSI_GATE)
     // gate HIGH
-    digitalWrite(MOSI_GATE, HIGH);
-#else // direct connection
+    digitalWrite(MOSI_GATE, LOW);
+    // if direct connection w/o gate, i.e., HVPROG2 is running at 3.3V
     // MOSI line set to INPUT
     DDRB &= ~_BV(5); // PB5 = MOSI;
-#endif
 }
 #endif
 
@@ -262,8 +264,7 @@ EnableHeartBeat(void)
 {
     // set PDI_DATA high for < 100us to disable RESET function on PDI_CLK
     // Note: Since RESET line in a circuit might have capacitance longer delay is better 
-//    delayMicroseconds(58);
-delayMicroseconds(20);
+    delayMicroseconds(58);
     SPI.transfer(0xFF); // send 16 clock pulses to PDI_CLK
     SPI.transfer(0xFF);
 
@@ -388,7 +389,8 @@ PDILoad(uint8_t c, uint8_t *p, uint8_t n)
  
     PDITransfer(c, true);
     MOSI_TRISTATE();
-    data.c[1] = SPI.transfer(0xFF) | B00000011; // the first 2 bits are garbage
+    SPI.transfer(0xFF); // # of guard clock bits = 8
+    data.c[1] = 0xFF;
     do {
         while (data.c[1] == 0xFF) // wait for the start bit
             data.c[1] = SPI.transfer(0xFF);
@@ -442,6 +444,11 @@ PDISendKey(void)
 static void
 PDIEnableTarget(void)
 {
+#if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
+    // make sure that 12V regulator is shutdown 
+    digitalWrite(SMO_HVENABLE, LOW);
+    pinMode(SMO_HVENABLE, OUTPUT);
+#endif
     pinMode(MISO, INPUT);
     digitalWrite(MOSI, LOW);
     pinMode(MOSI, OUTPUT);    // specify the data direction of MOSI and SCK to become SPI master
@@ -455,7 +462,7 @@ PDIEnableTarget(void)
     digitalWrite(MOSI, HIGH); // to keep MOSI HIGH from HeartBeatOn() to HeartBeatOff()    
     SPDR = 0xFF;              // to keep MOSI HIGH before the first data (dummy clocks) is shifted out
     SPI.begin();
-    SPI.beginTransaction(SPISettings(2000000, LSBFIRST, SPI_MODE3));
+    SPI.beginTransaction(SPISettings(20000000, LSBFIRST, SPI_MODE3));
     EnableHeartBeat();
 }
 
@@ -503,8 +510,8 @@ SMoPDI::EnterProgmode()
     uint8_t s;
     
     PDIEnableTarget();
-    /* Direction change guard time to 2 CLK bits */
-    //PDIStore(PDI_CMD_STCS | REG_CTRL, _BV(GT2) | _BV(GT1) | _BV(GT0));
+    /* Direction change guard time to 8 CLK bits */
+    PDIStore(PDI_CMD_STCS | REG_CTRL, _BV(GT2));
     PDIStore(PDI_CMD_STCS | REG_RESET, 0x59); // reset key
     PDISendKey();
     if (!WaitUntilNVMActive())

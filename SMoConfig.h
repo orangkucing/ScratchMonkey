@@ -33,30 +33,14 @@
 #define    SMO_LAYOUT_MEGA         2
 #define    SMO_LAYOUT_HVPROG2      3
 
-// A 5V-logic Arduino needs a 5V-tolerant bus buffer 74LVxxx125 as a level shifter to do PDI programming where the target voltage must be 3.3V.
-// For this purpose no automatic level shifter is known to work stably, i.e., none of MAX3002, GTL2003, TXB0104, or FXMA108 works reliably.
-// cf. Adding 100 kilo ohm resistor between PDI_DATA and GND sometimes solves the problem:
-//            http://blog.frankvh.com/2009/09/22/avr-xmega-and-avrisp-mk2/
-//            http://www.avrfreaks.net/forum/intermittant-programming-xplained-board-avrisp2?name=PNphpBB2&file=viewtopic&t=107517
-//     Or adding about 100 pico farad capacitor also helps 
 #if defined(__AVR_ATmega32U4__)
 #define SMO_LAYOUT  SMO_LAYOUT_LEONARDO
-// Since Leonardo is 5V logic we must use a 5V tolerant bus buffer 74LVxxx125 as a level shifter to PDI programming voltage 3.3V.
-#define MOSI_GATE 8
 #elif defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
 #define SMO_LAYOUT  SMO_LAYOUT_MEGA
-// Since Mega is 5V logic we must use a 5V tolerant bus buffer 74LVxxx125 as a level shifter to PDI programming voltage 3.3V.
-#define MOSI_GATE 8
 #elif defined(__AVR_ATmega328__) || defined(__AVR_ATmega328P__) || defined(__AVR_ATmega168__) || defined(__AVR_ATmega168P__)
 #define SMO_LAYOUT  SMO_LAYOUT_STANDARD
-// Since Uno is 5V logic we must use a 5V tolerant bus buffer 74LVxxx125 as a level shifter to PDI programming voltage 3.3V.
-// If you are using a 3.3V logic such as Pro Mini 3.3V 8MHz then comment out the following line. 
-#define MOSI_GATE 8
 #elif defined(__AVR_ATmega16__) || defined(__AVR_ATmega164P__) || defined(__AVR_ATmega32__) || defined(__AVR_ATmega324P__) || defined(__AVR_ATmega644P__) || defined(__AVR_ATmega1284P__)
 #define SMO_LAYOUT  SMO_LAYOUT_HVPROG2
-// HVPROG2 can run the board in 3.3V logic by supplying 3.3V to its VCC. In this case no bus buffer is necessary for PDI programming.
-// But Atmel's original STK500 board needs a 5V tolerant bus buffer 74LVxxx125 for PDI programming and the following line to be defined:
-#define MOSI_GATE 0 // PB0
 #else
 #error Unknown Arduino platform, help me define the correct pin layout
 #endif

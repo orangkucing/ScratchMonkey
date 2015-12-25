@@ -414,7 +414,7 @@ SMoHVPP::EnterProgmode()
 
     delay(progModeDelay);
     // power off target
-#if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
+#ifdef SMO_AVCC
     analogWrite(HVPP_VCC, 0);
 #else
     digitalWrite(HVPP_VCC, LOW);
@@ -435,9 +435,9 @@ SMoHVPP::EnterProgmode()
     // make sure HVPP_VCC is 0V
     delay(powerOffDelay);
     if (toggleVtg) {
-#if defined(SMO_AVCC)
+#ifdef SMO_AVCC
         uint32_t time = millis();
-        while (analogRead(SMO_AVCC) > 50) {   // wait until HVPP_VCC become lower than 0.3V
+        while (analogRead(SMO_AVCC) > 10) {   // wait until HVPP_VCC becomes lower than 0.06V
             if (millis() - time > DEFAULTTIMEOUT)  // timeout
                 break;
         }
@@ -446,13 +446,21 @@ SMoHVPP::EnterProgmode()
 #endif
     }
     // power on target
-#if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
-    analogWrite(HVPP_VCC, FIVEVOLT);
+    {
+#ifdef SMO_AVCC
+        uint32_t time = millis();
+        analogWrite(HVPP_VCC, 255);
+        while (analogRead(SMO_AVCC) < 600) {    // wait until HVPP_VCC becomes higher than 3.6V
+            if (millis() - time > DEFAULTTIMEOUT) // timeout
+                break;
+        }
+        analogWrite(HVPP_VCC, FIVEVOLT);
 #else
-    digitalWrite(HVPP_VCC, HIGH);
+        digitalWrite(HVPP_VCC, HIGH);
 #endif
+    }
     delay(resetDelayMs);
-    delayMicroseconds(resetDelayUs * 10 + 250); // add extra 250 microseconds
+    delayMicroseconds(resetDelayUs * 10);
     // toggle XTAL1
     for (uint8_t i=0; i<latchCycles; ++i) {
         HVPP_TOGGLE_XTAL;
@@ -469,25 +477,30 @@ SMoHVPP::EnterProgmode()
 void
 SMoHVPP::LeaveProgmode()
 {
-    // these values are in micro seconds not millisecconds as written in AVR068
-    // or Atmel Studio fails with timeout
     const uint8_t   stabDelay  = SMoCommand::gBody[1];
     const uint8_t   resetDelay = SMoCommand::gBody[2];
 
-#if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
+#ifdef SMO_AVCC
     analogWrite(HVPP_VCC, 0);
 #else
     digitalWrite(HVPP_VCC, LOW);
 #endif
     digitalWrite(HVPP_RESET, HIGH);
-    delayMicroseconds(resetDelay);
+    delay(resetDelay);
 
-#if SMO_LAYOUT==SMO_LAYOUT_HVPROG2
+#ifdef SMO_AVCC
     digitalWrite(SMO_HVENABLE, LOW); // disable 12V
-    analogWrite(HVPP_VCC, FIVEVOLT);
+    {
+        uint32_t time = millis();
+        analogWrite(HVPP_VCC, 255);
+        while (analogRead(SMO_AVCC) < 600) {    // wait until HVPP_VCC becomes higher than 3.6V
+            if (millis() - time > stabDelay) // timeout
+                break;
+        }
+        analogWrite(HVPP_VCC, FIVEVOLT);
+    }
     digitalWrite(HVPP_RESET, LOW);
 #endif
-    delayMicroseconds(stabDelay);
     SMoCommand::SendResponse();
 }
 
