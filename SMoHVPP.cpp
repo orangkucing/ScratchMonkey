@@ -437,28 +437,22 @@ SMoHVPP::EnterProgmode()
     if (toggleVtg) {
 #ifdef SMO_AVCC
         uint32_t time = millis();
-        while (analogRead(SMO_AVCC) > 10) {   // wait until HVPP_VCC becomes lower than 0.06V
-            if (millis() - time > DEFAULTTIMEOUT)  // timeout
+        while (analogRead(SMO_AVCC) > 10) { // wait until HVPP_VCC becomes lower than 0.06V
+            if (millis() - time > DEFAULTTIMEOUT)
                 break;
         }
 #else
-        delay(100);
+        delay(DEFAULTTIMEOUT);
 #endif
     }
     // power on target
-    {
 #ifdef SMO_AVCC
-        uint32_t time = millis();
-        analogWrite(HVPP_VCC, 255);
-        while (analogRead(SMO_AVCC) < 600) {    // wait until HVPP_VCC becomes higher than 3.6V
-            if (millis() - time > DEFAULTTIMEOUT) // timeout
-                break;
-        }
-        analogWrite(HVPP_VCC, FIVEVOLT);
+    analogWrite(HVPP_VCC, 255);
+    while (analogRead(SMO_AVCC) < 743) ;   // wait until HVPP_VCC becomes higher than 4.5V
+    analogWrite(HVPP_VCC, FIVEVOLT);
 #else
-        digitalWrite(HVPP_VCC, HIGH);
+    digitalWrite(HVPP_VCC, HIGH);
 #endif
-    }
     delay(resetDelayMs);
     delayMicroseconds(resetDelayUs * 10);
     // toggle XTAL1
@@ -486,21 +480,16 @@ SMoHVPP::LeaveProgmode()
     digitalWrite(HVPP_VCC, LOW);
 #endif
     digitalWrite(HVPP_RESET, HIGH);
-    delay(resetDelay);
+    delayMicroseconds(resetDelay * 10);
 
 #ifdef SMO_AVCC
     digitalWrite(SMO_HVENABLE, LOW); // disable 12V
-    {
-        uint32_t time = millis();
-        analogWrite(HVPP_VCC, 255);
-        while (analogRead(SMO_AVCC) < 600) {    // wait until HVPP_VCC becomes higher than 3.6V
-            if (millis() - time > stabDelay) // timeout
-                break;
-        }
-        analogWrite(HVPP_VCC, FIVEVOLT);
-    }
+    analogWrite(HVPP_VCC, 255);
+    while (analogRead(SMO_AVCC) < 743) ;    // wait until HVPP_VCC becomes higher than 4.5V
+    analogWrite(HVPP_VCC, FIVEVOLT);
     digitalWrite(HVPP_RESET, LOW);
 #endif
+    delayMicroseconds(stabDelay * 10);
     SMoCommand::SendResponse();
 }
 
