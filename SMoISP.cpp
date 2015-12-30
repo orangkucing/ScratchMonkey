@@ -35,7 +35,7 @@ enum {
     ISP_RESET       = SS,
     MCU_CLOCK       = 9,    // OC1A    
 #elif SMO_LAYOUT==SMO_LAYOUT_LEONARDO
-    ISP_RESET       = 10,
+    ISP_RESET       = 10,   // no dedicated SS pin on Arduino Micro
     MCU_CLOCK       = 9,    // OC1A
 #elif SMO_LAYOUT==SMO_LAYOUT_MEGA
     ISP_RESET       = SS,

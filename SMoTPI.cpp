@@ -27,14 +27,17 @@
 //
 enum {
     TPI_VCC         = SMO_SVCC,        // toggling VCC is optional unless RSTDISBL fuse is programmed
-    TPI_HVRESET     = SMO_HVRESET,     // HV reset is also optional.
 #if SMO_LAYOUT==SMO_LAYOUT_STANDARD
-    TPI_RESET       = SS,
+    TPI_HVRESET     = 9,               // HV reset is optional.
+    TPI_RESET       = 8,
 #elif SMO_LAYOUT==SMO_LAYOUT_LEONARDO
-    TPI_RESET       = 10,
+    TPI_HVRESET     = 9,               // HV reset is optional.
+    TPI_RESET       = 8,
 #elif SMO_LAYOUT==SMO_LAYOUT_MEGA
-    TPI_RESET       = SS,
+    TPI_HVRESET     = 9,               // HV reset is optional.
+    TPI_RESET       = 8,
 #elif SMO_LAYOUT==SMO_LAYOUT_HVPROG2
+    TPI_HVRESET     = SMO_HVRESET,     // HV reset is optional.
     TPI_RESET       = SS,
 #endif
 };
