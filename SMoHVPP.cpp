@@ -440,11 +440,9 @@ SMoHVPP::EnterProgmode()
             if (millis() - time > DEFAULTTIMEOUT)
                 break;
         }
-#else
-        delay(DEFAULTTIMEOUT);
 #endif
+        delay(powerOffDelay);
     }
-    delay(powerOffDelay);
     // power on target
 #ifdef SMO_AVCC
     analogWrite(HVPP_VCC, 255);
