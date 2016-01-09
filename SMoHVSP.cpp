@@ -215,7 +215,6 @@ SMoHVSP::EnterProgmode()
     digitalWrite(HVSP_SDO, LOW); // Prog_enable[2]
     pinMode(HVSP_SDO, OUTPUT);
     // make sure HVSP_VCC is 0V
-    delay(powerOffDelay);
     if (toggleVtg) {
 #ifdef SMO_AVCC
         uint32_t time = millis();
@@ -227,6 +226,7 @@ SMoHVSP::EnterProgmode()
         delay(DEFAULTTIMEOUT);
 #endif
     }
+    delay(powerOffDelay);
     // power on target
 #ifdef SMO_AVCC
     analogWrite(HVSP_VCC, 255);

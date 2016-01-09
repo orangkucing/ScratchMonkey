@@ -433,7 +433,6 @@ SMoHVPP::EnterProgmode()
     pinMode(SMO_HVENABLE, OUTPUT); // enable 12V
 #endif
     // make sure HVPP_VCC is 0V
-    delay(powerOffDelay);
     if (toggleVtg) {
 #ifdef SMO_AVCC
         uint32_t time = millis();
@@ -445,6 +444,7 @@ SMoHVPP::EnterProgmode()
         delay(DEFAULTTIMEOUT);
 #endif
     }
+    delay(powerOffDelay);
     // power on target
 #ifdef SMO_AVCC
     analogWrite(HVPP_VCC, 255);
