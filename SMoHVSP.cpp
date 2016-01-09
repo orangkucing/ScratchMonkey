@@ -228,7 +228,13 @@ SMoHVSP::EnterProgmode()
     // power on target
 #ifdef SMO_AVCC
     analogWrite(HVSP_VCC, 255);
-    while (analogRead(SMO_AVCC) < 743) ;    // wait until HVSP_VCC becomes higher than 4.5V
+    {
+        uint32_t time = millis();
+        while (analogRead(SMO_AVCC) < 743) {   // wait until HVSP_VCC becomes higher than 4.5V
+            if (millis() - time > DEFAULTTIMEOUT)
+                break;
+        }
+    }
     analogWrite(HVSP_VCC, FIVEVOLT);
 #else
     digitalWrite(HVSP_VCC, HIGH);
@@ -264,7 +270,13 @@ SMoHVSP::LeaveProgmode()
 #ifdef SMO_AVCC
     digitalWrite(SMO_HVENABLE, LOW); // disable 12V
     analogWrite(HVSP_VCC, 255);
-    while (analogRead(SMO_AVCC) < 743) ;    // wait until HVSP_VCC becomes higher than 4.5V
+    {
+        uint32_t time = millis();
+        while (analogRead(SMO_AVCC) < 743) {   // wait until HVSP_VCC becomes higher than 4.5V
+            if (millis() - time > DEFAULTTIMEOUT)
+                break;
+        }
+    }
     analogWrite(HVSP_VCC, FIVEVOLT);
     digitalWrite(HVSP_RESET, LOW);
 #endif

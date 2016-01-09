@@ -206,7 +206,13 @@ TPIEnableTarget(void)
     // power on target
 #ifdef SMO_AVCC
     analogWrite(TPI_VCC, 255);
-    while (analogRead(SMO_AVCC) < 743) ;    // wait until TPI_VCC becomes higher than 4.5V
+    {
+        uint32_t time = millis();
+        while (analogRead(SMO_AVCC) < 743) {   // wait until TPI_VCC becomes higher than 4.5V
+            if (millis() - time > DEFAULTTIMEOUT)
+                break;
+        }
+    }
     analogWrite(TPI_VCC, FIVEVOLT);
 #else
     digitalWrite(TPI_VCC, HIGH);
