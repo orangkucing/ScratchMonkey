@@ -14,7 +14,7 @@
 
 // Modified by Hisashi Ito <info at mewpro.cc> (c) 2015
 // in order to support HVprog2, an STK500 clone open hardware that you can buy or make.
-// http://www.mewpro.cc
+// http://mewpro.cc/2016/01/20/how-to-use-hvprog2/
 
 #include "SMoHVSP.h"
 #include "SMoCommand.h"

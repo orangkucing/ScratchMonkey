@@ -7,7 +7,7 @@
 
 // This part of ScratchMonkey is written by Hisashi Ito <info at mewpro.cc> (c) 2015
 // in order to support HVprog2, an STK500 clone open hardware that you can buy or make.
-// http://www.mewpro.cc
+// http://mewpro.cc/2016/01/20/how-to-use-hvprog2/
 //
 // Derived from source codes of LUFA AVRISP mkII clone, avrdude, USBasp
 // and ATtiny4_5_9_10_20_40Programmer.ino
